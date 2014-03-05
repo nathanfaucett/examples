@@ -45,8 +45,8 @@ define([
                 v1, v2,
                 i;
 
-			i = vertices.length;
-            while(i--) {
+            i = vertices.length;
+            while (i--) {
                 v1 = vertices[i];
                 v2 = vertices[i + 1] || vertices[0];
 
@@ -68,11 +68,11 @@ define([
 
             this.vertices.length = this.normals.length = this._vertices.length = this._normals.length = 0;
 
-			i = vertices.length;
-            while(i--) this.vertices[i] = vertices[i].clone();
-			
-			i = normals.length;
-            while(i--) this.normals[i] = normals[i].clone();
+            i = vertices.length;
+            while (i--) this.vertices[i] = vertices[i].clone();
+
+            i = normals.length;
+            while (i--) this.normals[i] = normals[i].clone();
 
             return this;
         };
@@ -87,7 +87,7 @@ define([
                 n, nx, ny, v, vx, vy,
                 i = vertices.length;;
 
-            while(i--) {
+            while (i--) {
                 n = normals[i];
                 nx = n.x;
                 ny = n.y;
@@ -117,7 +117,7 @@ define([
 
                 vsum.x = vsum.y = 0;
 
-                while(i--) {
+                while (i--) {
                     v1.vadd(localPosition, vertices[i]);
                     v2.vadd(localPosition, vertices[(i + 1) % len]);
 
@@ -144,7 +144,7 @@ define([
                 v1, v2, area = 0,
                 i = len;
 
-            while(i--) {
+            while (i--) {
                 v1 = vertices[i];
                 v2 = vertices[(i + 1) % len];
 
@@ -169,7 +169,7 @@ define([
                     sum2 = 0,
                     i = len;
 
-                while(i--) {
+                while (i--) {
                     v1.vadd(localPosition, vertices[i]);
                     v2.vadd(localPosition, vertices[(i + 1) % len]);
 
@@ -220,7 +220,7 @@ define([
             pos.y = localPos.y;
             pos.transformMat32(matrix);
 
-            while(i--) {
+            while (i--) {
                 wvert = wverts[i] || (wverts[i] = new Vec2);
                 wnorm = wnorms[i] || (wnorms[i] = new Vec2);
 
@@ -251,11 +251,11 @@ define([
                 jsonNormals = json.normals || (json.normals = []),
                 i;
 
-			i = vertices.length;
-            while(i--) jsonVertices[i] = vertices[i].toJSON(jsonVertices[i]);
-			
-			i = normals.length;
-            while(i--) jsonNormals[i] = normals[i].toJSON(jsonNormals[i]);
+            i = vertices.length;
+            while (i--) jsonVertices[i] = vertices[i].toJSON(jsonVertices[i]);
+
+            i = normals.length;
+            while (i--) jsonNormals[i] = normals[i].toJSON(jsonNormals[i]);
 
             return json;
         };
@@ -267,18 +267,18 @@ define([
                 normals = this.normals,
                 jsonVertices = json.vertices,
                 jsonNormals = json.normals,
-				verticesLength = jsonVertices.length,
-				normalsLength = jsonNormals.length,
+                verticesLength = jsonVertices.length,
+                normalsLength = jsonNormals.length,
                 i;
 
             vertices.length = this._vertices.length = verticesLength;
-			normals.length = this._normals.length = normalsLength;
+            normals.length = this._normals.length = normalsLength;
 
-			i = verticesLength;
-            while(i--) vertices[i] = (vertices[i] || new Vec2()).fromJSON(jsonVertices[i]);
-			
-			i = normalsLength;
-            while(i--) normals[i] = (normals[i] || new Vec2()).fromJSON(jsonNormals[i]);
+            i = verticesLength;
+            while (i--) vertices[i] = (vertices[i] || new Vec2()).fromJSON(jsonVertices[i]);
+
+            i = normalsLength;
+            while (i--) normals[i] = (normals[i] || new Vec2()).fromJSON(jsonNormals[i]);
 
             return this;
         };

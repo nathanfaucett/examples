@@ -433,7 +433,7 @@ define([
 
                 i;
 
-			i = verticesi.length;
+            i = verticesi.length;
             while (i--) {
                 v = verticesi[i];
                 vx = v.x;
@@ -462,7 +462,7 @@ define([
                 }
             }
 
-			i = verticesj.length;
+            i = verticesj.length;
             while (i--) {
                 v = verticesj[i];
                 vx = v.x;

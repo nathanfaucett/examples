@@ -18,7 +18,7 @@ define([
 
         /**
          * @class Quat
-         * quaterian
+         * quaternion
          * @param Number x
          * @param Number y
          * @param Number z
@@ -533,6 +533,45 @@ define([
         Quat.prototype.dot = function(other) {
 
             return this.x * other.x + this.y * other.y + this.z * other.z + this.w * other.w;
+        };
+
+        /**
+         * @method rotationX
+         * @memberof Odin.Quat
+         * gets quat's x rotation as an eular angle
+         * @param Number angle
+         * @return this
+         */
+        Quat.prototype.rotationX = function() {
+            var w = this.w;
+
+            return this.x / sqrt(1 - (w * w));
+        };
+
+        /**
+         * @method rotationY
+         * @memberof Odin.Quat
+         * gets quat's y rotation as an eular angle
+         * @param Number angle
+         * @return this
+         */
+        Quat.prototype.rotationY = function() {
+            var w = this.w;
+
+            return this.y / sqrt(1 - (w * w));
+        };
+
+        /**
+         * @method rotationZ
+         * @memberof Odin.Quat
+         * gets quat's z rotation as an eular angle
+         * @param Number angle
+         * @return this
+         */
+        Quat.prototype.rotationZ = function() {
+            var w = this.w;
+
+            return this.z / sqrt(1 - (w * w));
         };
 
         /**

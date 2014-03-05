@@ -75,11 +75,14 @@ define([
                 _lastScene = undefined,
                 _mat4 = new Mat4,
                 _projScreenMatrix = new Mat4,
+                _vector2 = new Vec2,
                 _vector3 = new Vec3,
                 _vector3_2 = new Vec3,
+                _vector4 = new Vec4,
                 _color = new Color,
                 _shaders = {},
-                _lastBuffers = undefined;
+                _lastBuffers = undefined,
+                _spriteBuffers = {};
 
             this.preRender = function(gui, scene, camera) {
                 if (!_context) return;
@@ -111,15 +114,27 @@ define([
                     _lastCamera = camera;
                 }
                 if (scene && _lastScene !== scene) {
-					if (_lastScene) removeSceneEvents(_lastScene);
-					addSceneEvents(scene);
-					
+                    if (_lastScene) removeSceneEvents(_lastScene);
+                    addSceneEvents(scene);
+
                     _lastScene = scene;
                 }
 
                 _projScreenMatrix.mmul(camera.projection, camera.view);
                 if (this.autoClear) clearCanvas(this.autoClearColor, this.autoClearDepth, this.autoClearStencil);
             };
+
+            /**
+             * @method renderGUI
+             * @memberof Renderer
+             * @brief renderers gui within camera's viewport
+             * @param GUI gui
+             * @param Camera camera
+             */
+            function renderGUI(gui, camera) {
+				
+			}
+			this.renderGUI = renderGUI;
 
             /**
              * @method render
@@ -146,7 +161,7 @@ define([
                 i = meshFilters.length;
                 while (i--) {
                     meshFilter = meshFilters[i];
-                    transform = meshFilter.transform;
+                    transform = meshFilter.transform || sprite.transform2d;
 
                     if (!transform) continue;
 
@@ -156,8 +171,8 @@ define([
 
                 i = sprites.length;
                 while (i--) {
-                    sprite = sprite[i];
-                    transform = sprite.transform;
+                    sprite = sprites[i];
+                    transform = sprite.transform || sprite.transform2d;
 
                     if (!transform) continue;
 
@@ -168,7 +183,7 @@ define([
                 i = particleSystems.length;
                 while (i--) {
                     particleSystem = particleSystems[i];
-                    transform = particleSystem.transform;
+                    transform = particleSystem.transform || sprite.transform2d;
 
                     if (!transform) continue;
 
@@ -221,7 +236,37 @@ define([
 
 
             function renderSprite(camera, lights, ambient, transform, sprite) {
-                
+                var material = sprite.material,
+                    side, shader;
+
+                if (!material) return;
+
+                setBlending(material.blending);
+
+                side = material.side;
+                if (side === Side.Front) {
+                    setCullFace(CullFace.Back);
+                } else if (side === Side.Back) {
+                    setCullFace(CullFace.Front);
+                } else if (side === Side.Both) {
+                    setCullFace();
+                }
+
+                shader = createSpriteShader(sprite, material, lights);
+
+                if (!sprite._webglMeshInitted) {
+                    shader.used++;
+                    sprite._webglMeshInitted = true;
+                }
+
+                shader.bind(sprite, material, transform, camera, lights, ambient);
+
+                if (material.wireframe) {
+                    setLineWidth(material.wireframeLineWidth);
+                    _gl.drawArrays(_gl.LINE_STRIP, 0, _spriteBuffers._webglVertexCount);
+                } else {
+                    _gl.drawArrays(_gl.TRIANGLE_STRIP, 0, _spriteBuffers._webglVertexCount);
+                }
             }
 
 
@@ -234,27 +279,29 @@ define([
                 while (i--) {
                     emitter = emitters[i];
 
-                    material = emitter.material;
-                    if (!material) return;
+                    if (emitter instanceof Emitter) {
+                        material = emitter.material;
+                        if (!material) return;
 
-                    setBlending(material.blending);
-                    setCullFace(CullFace.Back);
+                        setBlending(material.blending);
+                        setCullFace(CullFace.Back);
 
-                    createEmitterBuffers(emitter, transform);
-                    shader = createEmitterShader(emitter, material, lights);
-                    shader.bind(emitter, material, transform, camera, lights, ambient);
+                        createEmitterBuffers(emitter, transform);
+                        shader = createEmitterShader(emitter, material, lights);
+                        shader.bind(emitter, material, transform, camera, lights, ambient);
 
-                    if (!emitter._webglInitted) {
-                        shader.used++;
-                        emitter._webglInitted = true;
+                        if (!emitter._webglInitted) {
+                            shader.used++;
+                            emitter._webglInitted = true;
+                        }
+
+                        _gl.drawArrays(_gl.POINTS, 0, emitter._webglParticleCount);
                     }
-
-                    _gl.drawArrays(_gl.POINTS, 0, emitter._webglParticleCount);
                 }
             }
 
-			function addSceneEvents(scene) {
-				var components = scene.components,
+            function addSceneEvents(scene) {
+                var components = scene.components,
                     meshFilters = components.MeshFilter || EMPTY_ARRAY,
                     particleSystems = components.ParticleSystem || EMPTY_ARRAY,
                     meshFilter, particleSystem, sprite, transform, transform2d,
@@ -263,42 +310,42 @@ define([
                 i = meshFilters.length;
                 while (i--) {
                     meshFilter = meshFilters[i];
-					meshFilter.on("remove", onMeshFilterRemove);
+                    meshFilter.on("remove", onMeshFilterRemove);
                 }
 
                 i = particleSystems.length;
                 while (i--) {
                     particleSystem = particleSystems[i];
-					particleSystem.on("remove", onParticleSystemRemove);
+                    particleSystem.on("remove", onParticleSystemRemove);
                 }
-				
-				scene.on("addMeshFilter", onMeshFilterAdd);
-				scene.on("addParticleSystem", onMeshFilterAdd);
-			}
 
-			function removeSceneEvents(scene) {
-				
-				scene.off("addMeshFilter", onMeshFilterAdd);
-				scene.off("addParticleSystem", onMeshFilterAdd);
-			}
+                scene.on("addMeshFilter", onMeshFilterAdd);
+                scene.on("addParticleSystem", onMeshFilterAdd);
+            }
+
+            function removeSceneEvents(scene) {
+
+                scene.off("addMeshFilter", onMeshFilterAdd);
+                scene.off("addParticleSystem", onMeshFilterAdd);
+            }
 
             function onMeshFilterAdd(meshFilter) {
-				
-				meshFilter.on("remove", onMeshFilterRemove);
+
+                meshFilter.on("remove", onMeshFilterRemove);
             }
 
             function onParticleSystemAdd(particleSystem) {
-				
-				particleSystem.on("remove", onParticleSystemRemove);
+
+                particleSystem.on("remove", onParticleSystemRemove);
             }
 
             function onMeshFilterRemove() {
-				var mesh = this.mesh;
-			
+                var mesh = this.mesh;
+
                 deleteMeshBuffers(mesh);
-				deleteShader(mesh);
-				
-				this.off("remove", onMeshFilterRemove);
+                deleteShader(mesh);
+
+                this.off("remove", onMeshFilterRemove);
             }
 
             function onParticleSystemRemove() {
@@ -306,13 +353,13 @@ define([
                     emitter, i = emitters.length;
 
                 while (i--) {
-					emitter = emitters[i];
-					
-					deleteEmitterBuffers(emitter);
-					deleteShader(emitter);
-				}
-				
-				this.off("remove", onParticleSystemRemove);
+                    emitter = emitters[i];
+
+                    deleteEmitterBuffers(emitter);
+                    deleteShader(emitter);
+                }
+
+                this.off("remove", onParticleSystemRemove);
             }
 
             function deleteMeshBuffers(mesh) {
@@ -343,7 +390,7 @@ define([
 
             function deleteShader(obj) {
                 var shader = _shaders[obj._id];
-				if (!shader) return;
+                if (!shader) return;
 
                 if (shader.used > 0) {
                     shader.used--;
@@ -711,6 +758,42 @@ define([
             }
 
 
+            function createSpriteShader(sprite, material, lights) {
+                if (!material.needsUpdate && (_shaders[sprite._id])) return _shaders[sprite._id];
+
+                var shader = material.shader,
+                    uniforms = material.uniforms,
+                    OES_standard_derivatives = !! _extensions.OES_standard_derivatives,
+                    parameters = {};
+
+                parameters.sprite = true;
+                parameters.mobile = Device.mobile;
+                parameters.useLights = shader.lights;
+                parameters.useShadows = shader.shadows;
+                parameters.useFog = shader.fog;
+                parameters.useBones = false;
+                parameters.useVertexLit = shader.vertexLit;
+                parameters.useSpecular = shader.specular;
+
+                parameters.useNormal = !! uniforms.normalMap;
+                parameters.useBump = !! uniforms.bumpMap;
+
+                parameters.positions = true;
+                parameters.normals = false;
+                parameters.tangents = false;
+                parameters.uvs = true;
+                parameters.colors = false;
+
+                parameters.OES_standard_derivatives = OES_standard_derivatives && shader.OES_standard_derivatives;
+
+                allocateLights(lights, parameters);
+                allocateShadows(lights, parameters);
+
+                material.needsUpdate = false;
+                return (_shaders[sprite._id] = createShaderProgram(shader.vertex, shader.fragment, parameters));
+            }
+
+
             function createEmitterShader(emitter, material, lights) {
                 if (!material.needsUpdate && (_shaders[emitter._id])) return _shaders[emitter._id];
 
@@ -854,32 +937,55 @@ define([
                     uniforms = this.uniforms,
                     attributes = this.attributes,
                     force = setProgram(program),
-                    i, length;
+                    sprite = parameters.sprite,
+                    texture, w, h, i, length;
 
-                if (obj !== _lastBuffers) {
-                    disableAttributes();
+                if (sprite) {
+                    if (_lastBuffers !== _spriteBuffers) {
+                        disableAttributes();
 
-                    if (obj._webglVertexBuffer && attributes.position) attributes.position.set(obj._webglVertexBuffer);
-                    if (obj._webglNormalBuffer && attributes.normal) attributes.normal.set(obj._webglNormalBuffer);
-                    if (obj._webglTangentBuffer && attributes.tangent) attributes.tangent.set(obj._webglTangentBuffer);
-                    if (obj._webglColorBuffer && attributes.color) attributes.color.set(obj._webglColorBuffer);
+                        attributes.position.set(_spriteBuffers._webglVertexBuffer);
+                        attributes.uv.set(_spriteBuffers._webglUvBuffer);
 
-                    if (obj._webglUvBuffer && attributes.uv) attributes.uv.set(obj._webglUvBuffer);
-                    if (obj._webglUv2Buffer && attributes.uv2) attributes.uv2.set(obj._webglUv2Buffer);
-
-                    if (obj._webglBoneIndicesBuffer && attributes.boneIndex) attributes.boneIndex.set(obj._webglBoneIndicesBuffer);
-                    if (obj._webglBoneWeightsBuffer && attributes.boneWeight) attributes.boneWeight.set(obj._webglBoneWeightsBuffer);
-
-                    if (obj._webglParticleBuffer && attributes.data) attributes.data.set(obj._webglParticleBuffer);
-                    if (obj._webglParticleColorBuffer && attributes.particleColor) attributes.particleColor.set(obj._webglParticleColorBuffer);
-
-                    if (material.wireframe) {
-                        if (obj._webglLineBuffer) _gl.bindBuffer(_gl.ELEMENT_ARRAY_BUFFER, obj._webglLineBuffer);
-                    } else {
-                        if (obj._webglIndexBuffer) _gl.bindBuffer(_gl.ELEMENT_ARRAY_BUFFER, obj._webglIndexBuffer);
+                        _lastBuffers = _spriteBuffers;
                     }
+                } else {
+                    if (_lastBuffers !== obj) {
+                        disableAttributes();
 
-                    _lastBuffers = obj;
+                        if (obj._webglVertexBuffer && attributes.position) attributes.position.set(obj._webglVertexBuffer);
+                        if (obj._webglNormalBuffer && attributes.normal) attributes.normal.set(obj._webglNormalBuffer);
+                        if (obj._webglTangentBuffer && attributes.tangent) attributes.tangent.set(obj._webglTangentBuffer);
+                        if (obj._webglColorBuffer && attributes.color) attributes.color.set(obj._webglColorBuffer);
+
+                        if (obj._webglUvBuffer && attributes.uv) attributes.uv.set(obj._webglUvBuffer);
+                        if (obj._webglUv2Buffer && attributes.uv2) attributes.uv2.set(obj._webglUv2Buffer);
+
+                        if (obj._webglBoneIndicesBuffer && attributes.boneIndex) attributes.boneIndex.set(obj._webglBoneIndicesBuffer);
+                        if (obj._webglBoneWeightsBuffer && attributes.boneWeight) attributes.boneWeight.set(obj._webglBoneWeightsBuffer);
+
+                        if (obj._webglParticleBuffer && attributes.data) attributes.data.set(obj._webglParticleBuffer);
+                        if (obj._webglParticleColorBuffer && attributes.particleColor) attributes.particleColor.set(obj._webglParticleColorBuffer);
+
+                        if (material.wireframe) {
+                            if (obj._webglLineBuffer) _gl.bindBuffer(_gl.ELEMENT_ARRAY_BUFFER, obj._webglLineBuffer);
+                        } else {
+                            if (obj._webglIndexBuffer) _gl.bindBuffer(_gl.ELEMENT_ARRAY_BUFFER, obj._webglIndexBuffer);
+                        }
+
+                        _lastBuffers = obj;
+                    }
+                }
+
+                if (sprite) {
+                    texture = material.uniforms.diffuseMap;
+                    if (!texture) throw "Shader.bind: Sprite material and shader requires diffuseMap";
+
+                    w = texture.invWidth;
+                    h = texture.invHeight;
+
+                    uniforms.size.set(_vector2.set(obj.width, obj.height), force);
+                    uniforms.crop.set(_vector4.set(obj.x * w, obj.y * h, obj.w * w, obj.h * h), force);
                 }
 
                 if (parameters.emitter && parameters.worldSpace) {
@@ -894,10 +1000,10 @@ define([
                 if (uniforms.projectionMatrix) uniforms.projectionMatrix.set(camera.projection, force);
                 if (uniforms.viewMatrix) uniforms.viewMatrix.set(camera.view, force);
                 if (uniforms.normalMatrix) uniforms.normalMatrix.set(transform.normalMatrix, force);
-                if (uniforms.cameraPosition) uniforms.cameraPosition.set(_vector3.positionFromMat4(camera.transform.matrixWorld), force);
+                if (uniforms.cameraPosition) uniforms.cameraPosition.set(_vector3.positionFromMat4((camera.transform || camera.transform2d).matrixWorld), force);
                 if (uniforms.ambient) uniforms.ambient.set(ambient, force);
 
-                if (parameters.useLights && (length = lights.length)) {
+                if (force && parameters.useLights && (length = lights.length)) {
                     var maxPointLights = parameters.maxPointLights,
                         maxDirectionalLights = parameters.maxDirectionalLights,
                         maxSpotLights = parameters.maxSpotLights,
@@ -936,7 +1042,7 @@ define([
                         if (pointLightColor.length && type === LightType.Point) {
                             if (pointLights >= maxPointLights) continue;
 
-                            _vector3.positionFromMat4(light.transform.matrixWorld);
+                            _vector3.positionFromMat4((light.transform || light.transform2d).matrixWorld);
 
                             pointLightColor[pointLights].set(_color, force);
                             pointLightPosition[pointLights].set(_vector3, force);
@@ -945,7 +1051,7 @@ define([
                         } else if (directionalLightColor.length && type === LightType.Directional) {
                             if (directionalLights >= maxDirectionalLights) continue;
 
-                            _vector3.positionFromMat4(light.transform.matrixWorld).sub(light.target).normalize();
+                            _vector3.positionFromMat4((light.transform || light.transform2d).matrixWorld).sub(light.target).normalize();
                             if (_vector3.lengthSq() === 0) continue;
 
                             directionalLightColor[directionalLights].set(_color, force);
@@ -955,7 +1061,7 @@ define([
                         } else if (spotLightColor.length && type === LightType.Spot) {
                             if (spotLights >= maxSpotLights) continue;
 
-                            _vector3.positionFromMat4(light.transform.matrixWorld);
+                            _vector3.positionFromMat4((light.transform || light.transform2d).matrixWorld);
                             if (_vector3.lengthSq() === 0) continue;
 
                             _vector3_2.copy(_vector3).sub(light.target).normalize();
@@ -972,7 +1078,7 @@ define([
                         } else if (hemiLightColor.length && type === LightType.Hemi) {
                             if (hemiLights >= maxHemiLights) continue;
 
-                            _vector3.positionFromMat4(light.transform.matrixWorld).sub(light.target).normalize();
+                            _vector3.positionFromMat4((light.transform || light.transform2d).matrixWorld).sub(light.target).normalize();
                             if (_vector3.lengthSq() === 0) continue;
 
                             hemiLightColor[hemiLights].set(_color, force);
@@ -1013,6 +1119,7 @@ define([
                 var parameters = shader.parameters,
                     vertexShader = shader.vertex,
                     fragmentShader = shader.fragment,
+                    sprite = parameters.sprite,
                     emitter = parameters.emitter,
                     useLights = parameters.useLights,
                     useShadows = parameters.useShadows,
@@ -1029,6 +1136,7 @@ define([
                         useLights ? "#define USE_LIGHTS" : "",
                         useShadows ? "#define USE_SHADOWS" : "",
                         useBones ? "#define USE_SKINNING" : "",
+                        sprite ? "#define IS_SPRITE" : "",
 
                         useLights ? "#define MAX_DIR_LIGHTS " + parameters.maxDirectionalLights : "",
                         useLights ? "#define MAX_POINT_LIGHTS " + parameters.maxPointLights : "",
@@ -1079,6 +1187,11 @@ define([
                     vertexMain = glVertexShader.match(MAIN_FUNCTION)[5],
                     fragmentHeader = glFragmentShader.match(HEADER)[1],
                     fragmentMain = glFragmentShader.match(MAIN_FUNCTION)[5];
+
+                if (sprite) {
+                    vertexHeader += ShaderChunks.sprite_header;
+                    vertexMain += ShaderChunks.sprite_vertex_after;
+                }
 
                 if (emitter) {
                     vertexHeader += ShaderChunks.particle_header_vertex + ShaderChunks.particle_header;
@@ -1193,6 +1306,18 @@ define([
                 addEvent(_element, "webglcontextlost", handleWebGLContextLost, this);
                 addEvent(_element, "webglcontextrestored", handleWebGLContextRestored, this);
 
+                createBuffer(_spriteBuffers, "_webglVertexBuffer", new Float32Array([-0.5, 0.5, 0.0, -0.5, -0.5, 0.0,
+                    0.5, 0.5, 0.0,
+                    0.5, -0.5, 0.0
+                ]));
+                createBuffer(_spriteBuffers, "_webglUvBuffer", new Float32Array([
+                    0, 0,
+                    0, 1,
+                    1, 0,
+                    1, 1
+                ]));
+                _spriteBuffers._webglVertexCount = 4;
+
                 return this;
             };
 
@@ -1242,12 +1367,13 @@ define([
 
                 _enabledAttributes = undefined;
                 _lastProgram = undefined;
-				
+
                 _shaders = {};
+                _spriteBuffers = {}
                 _lastBuffers = undefined;
-				_lastCamera = undefined;
-				_lastResizeFn = undefined;
-				_lastScene = undefined;
+                _lastCamera = undefined;
+                _lastResizeFn = undefined;
+                _lastScene = undefined;
 
                 return this;
             };
@@ -1317,6 +1443,13 @@ define([
                     return _maxAttributes;
                 }
             });
+
+            function createBuffer(obj, name, array) {
+
+                obj[name] = obj[name] || _gl.createBuffer();
+                _gl.bindBuffer(_gl.ARRAY_BUFFER, obj[name]);
+                _gl.bufferData(_gl.ARRAY_BUFFER, array, _gl.STATIC_DRAW);
+            }
 
             function setViewport(x, y, width, height) {
                 x || (x = 0);
@@ -1898,7 +2031,7 @@ define([
                 var src = vertexShader + fragmentShader,
                     lines = src.split(SHADER_SPLITER),
                     defines = {}, matchAttributes, matchUniforms, matchDefines,
-                    uniformArray, name, type, length, line,
+                    uniformArray, name, type, location, length, line,
                     i, j;
 
                 i = lines.length;
@@ -1928,7 +2061,8 @@ define([
                             j = length;
                             while (j--) uniformArray[j] = createUniform(type, _gl.getUniformLocation(program, name + "[" + j + "]"));
                         } else {
-                            uniforms[name] = createUniform(type, _gl.getUniformLocation(program, name));
+                            location = _gl.getUniformLocation(program, name);
+                            if (location) uniforms[name] = createUniform(type, location);
                         }
                     }
                 }
@@ -1937,6 +2071,7 @@ define([
 
 
             function createAttribute(type, location) {
+                if (location < 0) return null;
 
                 if (type === "int") {
                     return new Attribute1i(location);
@@ -2021,6 +2156,7 @@ define([
 
 
             function createUniform(type, location) {
+                if (!location) return null;
 
                 if (type === "int") {
                     return new Uniform1i(location);
@@ -2163,38 +2299,6 @@ define([
         }
 
         EventEmitter.extend(Renderer);
-
-
-        var sprite_vertex = [
-            "uniform mat4 matrix;",
-            "uniform vec4 crop;",
-            "uniform vec2 size;",
-
-            "attribute vec2 position;",
-            "attribute vec2 uv;",
-
-            "varying vec2 vUv;",
-
-            "void main() {",
-
-            "	vUv = vec2(uv.x * crop.z, uv.y * crop.w) + crop.xy;",
-            "	gl_Position = matrix * vec4(position * size, 0.0, 1.0);",
-            "}"
-        ].join("\n");
-
-		var sprite_fragment = [
-			"uniform float alpha;",
-			"uniform sampler2D texture;",
-
-			"varying vec2 vUv;",
-
-			"void main() {",
-			"	vec4 finalColor = texture2D(texture, vUv);",
-			"	finalColor.w *= alpha;",
-
-			"	gl_FragColor = finalColor;",
-			"}"
-		].join("\n");
 
 
         return Renderer;

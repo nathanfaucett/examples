@@ -128,8 +128,8 @@ define([
 
 
         P2Space.prototype.add = function() {
-			var i = arguments.length;
-			
+            var i = arguments.length;
+
             while (i--) this.addBody(arguments[i]);
             return this;
         };
@@ -154,8 +154,8 @@ define([
 
 
         P2Space.prototype.remove = function() {
-			var i = arguments.length;
-			
+            var i = arguments.length;
+
             while (i--) this.removeBody(arguments[i]);
             return this;
         };
@@ -164,14 +164,15 @@ define([
         P2Space.prototype.findBodyByPoint = function(p) {
             var bodies = this.bodies,
                 body, shapes, shape,
-                i = bodies.length, j;
+                i = bodies.length,
+                j;
 
             while (i--) {
                 body = bodies[i];
                 if (!body) continue;
 
                 shapes = body.shapes;
-				j = shapes.length;
+                j = shapes.length;
                 while (j--) {
                     shape = shapes[j];
                     if (!shape) continue;
@@ -209,7 +210,7 @@ define([
             time = this.time += dt;
 
             if (this.useGravity) {
-				i = numBodies;
+                i = numBodies;
                 while (i--) {
                     body = bodies[i];
 
@@ -239,8 +240,8 @@ define([
             FRICTION_POOL.clear();
             frictions.length = 0;
 
-			i = contacts.length;
-            while(i--) {
+            i = contacts.length;
+            while (i--) {
                 c = contacts[i];
 
                 if (c.u > 0) {
@@ -276,7 +277,7 @@ define([
             stats.solve = now() - start;
 
             start = now();
-			i = numBodies;
+            i = numBodies;
             while (i--) {
                 body = bodies[i];
                 if (!body) continue;

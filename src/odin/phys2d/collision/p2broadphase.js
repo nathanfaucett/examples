@@ -40,9 +40,9 @@ define([
                     shapesNumi = shapesi.length;
                     shapesNumj = shapesj.length;
 
-					k = shapesNumi;
+                    k = shapesNumi;
                     while (k--) {
-						l = shapesNumj;
+                        l = shapesNumj;
                         while (l--) {
                             si = shapesi[k];
                             sj = shapesj[l];

@@ -131,7 +131,7 @@ define([
 
                 aabb.clear();
 
-				i = shapes.length;
+                i = shapes.length;
                 while (i--) {
                     shape = shapes[i];
                     shape.update(matrix);
@@ -225,7 +225,7 @@ define([
 
             totalCentroid.x = totalCentroid.y = 0;
 
-			i = shapes.length;
+            i = shapes.length;
             while (i--) {
                 shape = shapes[i];
 

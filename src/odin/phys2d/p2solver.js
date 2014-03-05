@@ -57,7 +57,7 @@ define([
 
             if (num > -1) {
 
-				i = num;
+                i = num;
                 while (i--) {
                     eq = equations[i];
 
@@ -65,14 +65,14 @@ define([
                     eq.init(h);
                 }
 
-				i = iterations;
+                i = iterations;
                 while (i--) {
 
                     iter++;
                     deltaLambdaTotal = 0;
 
-					j = num;
-					while (j--) {
+                    j = num;
+                    while (j--) {
                         eq = equations[j];
 
                         GWlambda = eq.calculateGWlambda();
@@ -89,7 +89,7 @@ define([
                     if (deltaLambdaTotal * deltaLambdaTotal < toleranceSq) break;
                 }
 
-				i = num;
+                i = num;
                 while (i--) {
                     eq = equations[i];
 

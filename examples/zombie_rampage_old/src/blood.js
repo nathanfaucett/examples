@@ -4,10 +4,20 @@ define([
     function(Odin) {
 
 
+        Odin.Assets.addAsset(
+            new Odin.Texture({
+                src: "content/blood.png",
+                name: "img_blood",
+                magFilter: "NEAREST",
+                minFilter: "NEAREST"
+            })
+        );
+
+
         return new Odin.ParticleSystem({
             emitter: new Odin.ParticleSystem.Emitter2D({
                 loop: false,
-                material: Odin.Assets.get("mat_blood"),
+                texture: Odin.Assets.hash["img_blood"],
 
                 worldSpace: true,
                 emissionRate: 0.1,
