@@ -6,17 +6,27 @@ define(
         "use strict";
 
 
-        var IS_SERVER = !(typeof(window) !== "undefined" && window.document),
+        var Time = require("odin/base/time"),
+            now = Time.now,
+
+            IS_SERVER = !(typeof(window) !== "undefined" && window.document),
             IS_CLIENT = !IS_SERVER,
 
             defineProperty = Object.defineProperty;
 
 
+        /**
+         * Holds all accessible Classes
+         * @class Odin
+         */
         function Odin() {
 
+            this.Phys2D = require("odin/phys2d/phys2d");
+
+            this.AudioCtx = require("odin/base/audio_ctx");
             this.Class = require("odin/base/class");
-            this.EventEmitter = require("odin/base/event_emitter");
             this.Enum = require("odin/base/enum");
+            this.EventEmitter = require("odin/base/event_emitter");
             this.ObjectPool = require("odin/base/object_pool");
             this.requestAnimationFrame = require("odin/base/request_animation_frame");
             this.Time = require("odin/base/time");
@@ -25,7 +35,6 @@ define(
             this.Shader = require("odin/core/assets/shaders/shader");
             this.ShaderLib = require("odin/core/assets/shaders/shader_lib");
             this.Asset = require("odin/core/assets/asset");
-            this.AssetLoader = require("odin/core/assets/asset_loader");
             this.Assets = require("odin/core/assets/assets");
             this.AudioClip = require("odin/core/assets/audio_clip");
             this.Bone = require("odin/core/assets/bone");
@@ -51,11 +60,12 @@ define(
             this.Transform = require("odin/core/components/transform");
             this.Transform2D = require("odin/core/components/transform_2d");
 
+            this.BaseGame = require("odin/core/game/base_game");
+            this.Client = require("odin/core/game/client");
             this.Game = require("odin/core/game/game");
-            this.ServerGame = require("odin/core/game/server_game");
             this.Config = require("odin/core/game/config");
             this.Log = require("odin/core/game/log");
-            this.BaseGame = require("odin/core/game/base_game");
+            this.ServerGame = require("odin/core/game/server_game");
 
             this.GUIComponent = require("odin/core/gui/components/gui_component");
             this.GUIContent = require("odin/core/gui/components/gui_content");
@@ -107,11 +117,34 @@ define(
         });
 
 
+        /**
+         * attaches Odin to window/global and all subclasses
+         */
         Odin.prototype.globalize = function() {
 
             for (var key in this) global[key] = this[key];
             global.Odin = this;
         };
+
+        /**
+         * benchmarks function console.logs number of operations / second
+         * @param String name
+         * @param Function fn
+         */
+		Odin.prototype.benchmark = function(name, fn, times) {
+			times || (times = 1000);
+			var start = 0.0,
+				time = 0.0,
+				i = times;
+			
+			while (i--) {
+				start = now();
+				fn();
+				time += now() - start;
+			}
+			
+			console.log(name + ":\n\t" + times / time +" (ops/sec)\n\t"+ time / times +"(avg/call)");
+		};
 
 
         return new Odin;

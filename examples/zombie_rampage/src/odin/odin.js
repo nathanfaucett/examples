@@ -64,11 +64,11 @@ define(
             this.Transform = require("odin/core/components/transform");
             this.Transform2D = require("odin/core/components/transform_2d");
 
-            this.Game = require("odin/core/game/game");
+            this.BaseGame = require("odin/core/game/base_game");
             this.ClientGame = require("odin/core/game/client_game");
+            this.Game = require("odin/core/game/game");
             this.Config = require("odin/core/game/config");
             this.Log = require("odin/core/game/log");
-            this.BaseGame = require("odin/core/game/base_game");
 
             this.GUIComponent = require("odin/core/gui/components/gui_component");
             this.GUIContent = require("odin/core/gui/components/gui_content");
@@ -81,6 +81,10 @@ define(
 
             this.Handler = require("odin/core/input/handler");
             this.Input = require("odin/core/input/input");
+
+            this.Canvas = require("odin/core/renderer/canvas");
+            this.Renderer = require("odin/core/renderer/renderer");
+            this.ShaderChunks = require("odin/core/renderer/shader_chunks");
 
             this.World = require("odin/core/world/world");
             this.World2D = require("odin/core/world/world_2d");
@@ -137,37 +141,24 @@ define(
         };
 
         /**
-         * benchmarks function n number of times returns average time it took
+         * benchmarks function console.logs number of operations / second
+         * @param String name
+         * @param Function fn
          */
-        Odin.prototype.benchmark = function() {
-            var sec = 1000,
-                min = 60 * sec,
-                hour = 60 * min;
-
-            function humanize(ms) {
-                return (
-                    ms >= hour ? (ms / hour).toFixed(1) + "h" :
-                    ms >= min ? (ms / min).toFixed(1) + "m" :
-                    ms >= sec ? (ms / sec | 0) + "s" :
-                    ms + "ms"
-                );
-            }
-
-            return function(name, fn, times) {
-                times || (times = 1000.0);
-                var start = 0.0,
-                    avg = 0.0,
-                    i = times | 0;
-
-                while (i--) {
-                    start = now();
-                    fn();
-                    avg += now() - start;
-                }
-
-                console.log(name + ": " + humanize(avg / times));
-            };
-        }();
+		Odin.prototype.benchmark = function(name, fn, times) {
+			times || (times = 1000);
+			var start = 0.0,
+				time = 0.0,
+				i = times;
+			
+			while (i--) {
+				start = now();
+				fn();
+				time += now() - start;
+			}
+			
+			console.log(name + ":\n\t" + times / time +" (ops/sec)\n\t"+ time / times +"(avg/call)");
+		};
 
 
         return new Odin;
