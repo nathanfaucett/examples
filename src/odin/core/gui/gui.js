@@ -10,9 +10,12 @@ define([
         "use strict";
 
 
-        var defineProperty = Object.defineProperty;
-
-
+        /**
+         * GUIs manage GUIObjects and their Components
+         * @class Odin.GUI
+         * @extends Odin.Class
+         * @param Object options
+         */
         function GUI(opts) {
             opts || (opts = {});
 
@@ -22,12 +25,12 @@ define([
 
             this.name = opts.name != undefined ? opts.name : "GUI_" + this._id;
 
-            this.aspect = 1.5;
             this.width = 960;
             this.height = 640;
+            this.aspect = this.width / this.height;
             this.invWidth = 1 / this.width;
             this.invHeight = 1 / this.height;
-
+			
             this.guiObjects = [];
             this._guiObjectHash = {};
             this._guiObjectJSONHash = {};
@@ -45,33 +48,46 @@ define([
 
         GUI.prototype.copy = function(other) {
             var otherGUIObjects = other.guiObjects,
-                i;
+                i = otherGUIObjects.length;
 
             this.clear();
             this.name = other.name + "." + this._id;
 
-            for (i = otherGUIObjects.length; i--;) this.addGUIObject(otherGUIObjects[i].clone());
+            while (i--) this.addGUIObject(otherGUIObjects[i].clone());
 
             return this;
         };
 
 
         GUI.prototype.init = function() {
+            var guiObjects = this.guiObjects,
+                componentTypes = this._componentTypes,
+                i = componentTypes.length;
+
+            i = guiObjects.length;
+            while (i--) guiObjects[i].emit("init");
+        };
+
+
+        GUI.prototype.start = function() {
             var types = this._componentTypes,
                 guiObjects = this.guiObjects,
                 components, component, i, j;
 
-            for (i = types.length; i--;) {
+            i = types.length;
+            while (i--) {
                 components = types[i];
-                for (j = components.length; j--;) {
+                j = components.length;
+                while (j--) {
                     component = components[j];
 
-                    component.emit("init");
-                    component.init();
+                    component.start();
+                    component.emit("start");
                 }
             }
 
-            for (i = guiObjects.length; i--;) guiObjects[i].emit("init");
+            i = guiObjects.length;
+            while (i--) guiObjects[i].emit("start");
         };
 
 
@@ -80,20 +96,23 @@ define([
                 guiObjects = this.guiObjects,
                 components, i, j;
 
-            for (i = types.length; i--;) {
+            i = types.length;
+            while (i--) {
                 components = types[i];
-                for (j = components.length; j--;) components[j].update();
+                j = components.length;
+                while (j--) components[j].update();
             }
 
-            for (i = guiObjects.length; i--;) guiObjects[i].emit("update");
+            i = guiObjects.length;
+            while (i--) guiObjects[i].emit("update");
         };
 
 
         GUI.prototype.clear = function() {
             var guiObjects = this.guiObjects,
-                i;
+                i = guiObjects.length;
 
-            for (i = guiObjects.length; i--;) this.removeGUIObject(guiObjects[i], true);
+            while (i--) this.removeGUIObject(guiObjects[i], true);
 
             this.off();
 
@@ -102,27 +121,9 @@ define([
 
 
         GUI.prototype.destroy = function() {
-            if (!this.game) {
-                Log.error("GUI.destroy: can't destroy GUI if it's not added to a Game");
-                return this;
-            }
 
-            this.game.removeGUI(this);
             this.emit("destroy");
-
             this.clear();
-
-            return this;
-        };
-
-
-        GUI.prototype.remove = function() {
-            if (!this.game) {
-                Log.error("GUI.destroy: can't destroy GUI if it's not added to a Game");
-                return this;
-            }
-
-            this.game.removeGUI(this);
 
             return this;
         };
@@ -135,7 +136,7 @@ define([
             }
             var guiObjects = this.guiObjects,
                 index = guiObjects.indexOf(guiObject),
-                components,
+                components, transform, children, child,
                 i;
 
             if (index === -1) {
@@ -148,7 +149,18 @@ define([
                 guiObject.gui = this;
 
                 components = guiObject.components;
-                for (i = components.length; i--;) this._addComponent(components[i]);
+                i = components.length;
+                while (i--) this._addComponent(components[i]);
+
+                if ((transform = guiObject.guiTransform)) {
+                    i = (children = transform.children).length;
+
+                    while (i--) {
+                        if ((child = children[i].guiObject) && !this.hasGUIObject(child)) {
+                            this.addGUIObject(child);
+                        }
+                    }
+                }
 
                 if (this.game) guiObject.emit("init");
                 this.emit("addGUIObject", guiObject);
@@ -161,8 +173,9 @@ define([
 
 
         GUI.prototype.addGUIObjects = function() {
+            var i = arguments.length;
 
-            for (var i = arguments.length; i--;) this.addGUIObject(arguments[i]);
+            while (i--) this.addGUIObject(arguments[i]);
             return this;
         };
 
@@ -172,21 +185,35 @@ define([
             var type = component._type,
                 components = this.components,
                 isNew = !components[type],
-                types = (components[type] = components[type] || []);
+                types = components[type] || (components[type] = []),
+                componentTypes = this._componentTypes;
 
             this._componentHash[component._id] = component;
             if (component._jsonId !== -1) this._componentJSONHash[component._jsonId] = component;
 
             types.push(component);
+
+            if (isNew) {
+                componentTypes.push(types);
+                componentTypes.sort(sortComponentTypes);
+            }
+
             types.sort(component.sort);
-
-            if (isNew) this._componentTypes.push(types);
-
-            if (this.game) component.init();
 
             this.emit("add" + type, component);
             this.emit("addComponent", component);
+
+            if (this.game) {
+                component.start();
+                component.emit("start");
+            }
         };
+
+
+        function sortComponentTypes(a, b) {
+
+            return (b[0].constructor.order || 0) - (a[0].constructor.order || 0);
+        }
 
 
         GUI.prototype.removeGUIObject = function(guiObject, clear) {
@@ -196,7 +223,7 @@ define([
             }
             var guiObjects = this.guiObjects,
                 index = guiObjects.indexOf(guiObject),
-                components,
+                components, transform, children, child,
                 i;
 
             if (index !== -1) {
@@ -208,7 +235,18 @@ define([
                 guiObject.gui = undefined;
 
                 components = guiObject.components;
-                for (i = components.length; i--;) this._removeComponent(components[i]);
+                i = components.length;
+                while (i--) this._removeComponent(components[i]);
+
+                if ((transform = guiObject.guiTransform)) {
+                    i = (children = transform.children).length;
+
+                    while (i--) {
+                        if ((child = children[i].guiObject) && this.hasGUIObject(child)) {
+                            this.removeGUIObject(child);
+                        }
+                    }
+                }
 
                 this.emit("removeGUIObject", guiObject);
                 guiObject.emit("remove", guiObject);
@@ -222,8 +260,9 @@ define([
 
 
         GUI.prototype.removeGUIObjects = function() {
+            var i = arguments.length;
 
-            for (var i = arguments.length; i--;) this.removeGUIObject(arguments[i]);
+            while (i--) this.removeGUIObject(arguments[i]);
             return this;
         };
 
@@ -245,6 +284,12 @@ define([
             this.emit("removeComponent", component);
 
             component.clear();
+        };
+
+
+        GUI.prototype.hasGUIObject = function(guiObject) {
+
+            return !!~this.guiObjects.indexOf(guiObject);
         };
 
 
@@ -297,16 +342,31 @@ define([
         };
 
 
+        GUI.prototype.find = function(name) {
+            var guiObjects = this.guiObjects,
+                child, i = guiObjects.length;
+
+            while (i--) {
+                child = guiObjects[i];
+
+                if (child.name === name) return child;
+                if ((child = child.find(name))) return child;
+            }
+
+            return undefined;
+        };
+
+
         GUI.prototype.toJSON = function(json) {
             json = Class.prototype.toJSON.call(this, json);
             var guiObjects = this.guiObjects,
                 jsonGUIObjects = json.guiObjects || (json.guiObjects = []),
                 guiObject,
-                i;
+                i = guiObjects.length;
 
             json.name = this.name;
 
-            for (i = guiObjects.length; i--;) {
+            while (i--) {
                 if ((guiObject = guiObjects[i])) jsonGUIObjects[i] = guiObject.toJSON(jsonGUIObjects[i]);
             }
 
@@ -318,14 +378,14 @@ define([
             Class.prototype.fromJSON.call(this, json);
             var jsonGUIObjects = json.guiObjects,
                 guiObject, jsonGUIObject,
-                i;
+                i = jsonGUIObjects.length;
 
             this.name = json.name;
 
-            for (i = jsonGUIObjects.length; i--;) {
+            while (i--) {
                 if (!(jsonGUIObject = jsonGUIObjects[i])) continue;
 
-                if ((guiObject = this.findById(jsonGUIObject._id))) {
+                if ((guiObject = this.findByJSONId(jsonGUIObject._id))) {
                     guiObject.fromJSON(jsonGUIObject);
                 } else {
                     this.addGUIObject(Class.fromJSON(jsonGUIObject));

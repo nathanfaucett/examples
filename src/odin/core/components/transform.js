@@ -38,33 +38,35 @@ define([
 
             this.modelView = new Mat4;
             this.normalMatrix = new Mat3;
-            this._matricesViewNeedsUpdate = false;
+            this._matricesNeedsUpdate = false;
         }
 
         Component.extend(Transform);
+        Transform.order = -999999;
 
 
         Transform.prototype.copy = function(other) {
             var children = other.children,
-                i;
+                i = children.length;
 
             this.position.copy(other.position);
             this.scale.copy(other.scale);
             this.rotation.copy(other.rotation);
 
-            for (i = children.length; i--;) this.addChild(children[i].gameObject.clone().transform);
+            while (i--) this.addChild(children[i].gameObject.clone().transform);
             if (other.parent) other.parent.addChild(this);
+
+            this._matricesNeedsUpdate = true;
 
             return this;
         };
 
-
         Transform.prototype.clear = function() {
             Component.prototype.clear.call(this);
             var children = this.children,
-                i;
+                i = children.length;
 
-            for (i = children.length; i--;) this.removeChild(children[i]);
+            while (i--) this.removeChild(children[i]);
 
             this.position.set(0, 0, 0);
             this.scale.set(1, 1, 1);
@@ -72,6 +74,8 @@ define([
 
             this.root = this;
             this.depth = 0;
+
+            this._matricesNeedsUpdate = true;
 
             return this;
         };
@@ -118,13 +122,13 @@ define([
         Transform.prototype.lookAt = function() {
             var mat = new Mat4,
                 vec = new Vec3,
-                dup = new Vec3(0, 0, 1);
+                dup = new Vec3(0.0, 0.0, 1.0);
 
             return function(target, up) {
                 up = up || dup;
 
                 if (target instanceof Transform) {
-                    vec.copy(target.position);
+                    vec.set(0.0, 0.0, 0.0).transformMat4(target.matrixWorld);
                 } else {
                     vec.copy(target);
                 }
@@ -143,8 +147,8 @@ define([
                 delta = new Vec3;
 
             return function(transform, speed) {
-                position.set(0, 0, 0).transformMat4(this.matrixWorld);
-                target.set(0, 0, 0).transformMat4(transform.matrixWorld);
+                position.set(0.0, 0.0, 0.0).transformMat4(this.matrixWorld);
+                target.set(0.0, 0.0, 0.0).transformMat4(transform.matrixWorld);
 
                 delta.vsub(target, position);
 
@@ -155,17 +159,17 @@ define([
         }();
 
 
-        Transform.prototype.addChild = function(child) {
+        Transform.prototype.addChild = function(child, others) {
             if (!(child instanceof Transform)) {
                 Log.error("Transform.add: can\'t add passed argument, it is not an instance of Transform");
                 return this;
             }
             var children = this.children,
                 index = children.indexOf(child),
-                root, depth;
+                root, depth, scene;
 
             if (index === -1) {
-                if (child.parent) child.parent.remove(child);
+                if (child.parent) child.parent.removeChild(child);
 
                 child.parent = this;
                 children.push(child);
@@ -181,6 +185,11 @@ define([
                 this.root = root;
 
                 updateDepth(this, depth);
+                if (!others) {
+                    if (this.gameObject && (scene = this.gameObject.scene)) {
+                        scene.components.Transform.sort(this.sort);
+                    }
+                }
             } else {
                 Log.error("Transform.add: child is not a member of this Transform");
             }
@@ -190,16 +199,21 @@ define([
 
 
         Transform.prototype.addChildren = function() {
+            var i = arguments.length,
+                scene;
 
-            for (var i = arguments.length; i--;) this.addChild(arguments[i]);
+            while (i--) this.addChild(arguments[i], true);
+            if (this.gameObject && (scene = this.gameObject.scene)) {
+                scene.components.Transform.sort(this.sort);
+            }
             return this;
         };
 
 
-        Transform.prototype.removeChild = function(child) {
+        Transform.prototype.removeChild = function(child, others) {
             var children = this.children,
                 index = children.indexOf(child),
-                root, depth;
+                root, depth, scene;
 
             if (index !== -1) {
                 child.parent = undefined;
@@ -216,6 +230,11 @@ define([
                 this.root = root;
 
                 updateDepth(this, depth);
+                if (!others) {
+                    if (this.gameObject && (scene = this.gameObject.scene)) {
+                        scene.components.Transform.sort(this.sort);
+                    }
+                }
             } else {
                 Log.error("Transform.remove: child is not a member of this Transform");
             }
@@ -225,17 +244,22 @@ define([
 
 
         Transform.prototype.removeChildren = function() {
+            var i = arguments.length,
+                scene;
 
-            for (var i = arguments.length; i--;) this.removeChild(arguments[i]);
+            while (i--) this.removeChild(arguments[i], true);
+            if (this.gameObject && (scene = this.gameObject.scene)) {
+                scene.components.Transform.sort(this.sort);
+            }
             return this;
         };
 
 
         Transform.prototype.detachChildren = function() {
             var children = this.children,
-                i;
+                i = children.length;
 
-            for (i = children.length; i--;) this.removeChild(children[i]);
+            while (i--) this.removeChild(children[i]);
             return this;
         };
 
@@ -243,6 +267,22 @@ define([
         Transform.prototype.hasChild = function(child) {
 
             return !!~this.children.indexOf(child);
+        };
+
+
+        Transform.prototype.find = function(name) {
+            var children = this.children,
+                child,
+                i = children.length;
+
+            while (i--) {
+                child = children[i];
+
+                if (child.gameObject.name === name) return child.gameObject;
+                if ((child = child.find(name))) return child;
+            }
+
+            return undefined;
         };
 
 
@@ -274,16 +314,16 @@ define([
                 this.matrixWorld.copy(matrix);
             }
 
-            this._matricesViewNeedsUpdate = true;
+            this._matricesNeedsUpdate = true;
         };
 
 
         Transform.prototype.updateMatrices = function(viewMatrix) {
-            if (!this._matricesViewNeedsUpdate) return;
+            if (!this._matricesNeedsUpdate) return;
 
             this.modelView.mmul(viewMatrix, this.matrixWorld);
             this.normalMatrix.inverseMat4(this.modelView).transpose();
-            this._matricesViewNeedsUpdate = false;
+            this._matricesNeedsUpdate = false;
         };
 
 
@@ -313,20 +353,22 @@ define([
             Component.prototype.fromJSON.call(this, json);
             var children = json.children,
                 i = children.length,
-                child;
+                child, scene;
 
-            if (this.gameObject && this.gameObject.scene) {
+            if (this.gameObject && (scene = this.gameObject.scene)) {
                 while (i--) {
-                    child = this.gameObject.scene.findComponentByJSONId(children[i]);
+                    child = scene.findComponentByJSONId(children[i]);
 
                     if (!this.hasChild(child)) {
                         this.addChild(child);
                     }
                 }
             } else {
-                this.once("init", function() {
+                this.once("start", function() {
+                    var scene = this.gameObject.scene;
+
                     while (i--) {
-                        child = this.gameObject.scene.findComponentByJSONId(children[i]);
+                        child = scene.findComponentByJSONId(children[i]);
 
                         if (!this.hasChild(child)) {
                             this.addChild(child);
@@ -339,17 +381,19 @@ define([
             this.scale.fromJSON(json.scale);
             this.rotation.fromJSON(json.rotation);
 
+            this._matricesNeedsUpdate = true;
+
             return this;
         };
 
 
         function updateDepth(transform, depth) {
             var children = transform.children,
-                i;
+                i = children.length;
 
             transform.depth = depth;
 
-            for (i = children.length; i--;) updateDepth(children[i], depth + 1);
+            while (i--) updateDepth(children[i], depth + 1);
         }
 
 

@@ -25,6 +25,9 @@ define([
             this._state = "normal";
             this.name = opts.name || "GUIStyle_" + this._id;
 
+            this.alpha = opts.alpha != undefined ? opts.alpha : 1.0;
+            this.z = opts.z != undefined ? opts.z : 0.0;
+
             this.alignment = opts.alignment || TextAnchor.Left;
             this.clipping = opts.alignment || TextClipping.Clip;
             this.contentOffset = opts.contentOffset || new Vec2;
@@ -38,9 +41,10 @@ define([
             this.hover = new GUIStyleState(opts.hover);
 
             this.font = opts.font || "Arial";
+            this.bitmap = opts.bitmap != undefined ? opts.bitmap : false;
             this.fontSize = opts.fontSize || 16;
             this.fontStyle = opts.fontStyle || "normal";
-            this.lineHeight = opts.lineHeight || 0;
+            this.lineHeight = opts.lineHeight || 24;
             this.lineSpacing = opts.lineSpacing || 0;
 
             this.margin = opts.margin || new RectOffset;
@@ -63,6 +67,9 @@ define([
         GUIStyle.prototype.copy = function(other) {
 
             this.name = other.name;
+
+            this.alpha = other.alpha;
+            this.z = other.z;
 
             this.alignment = other.alignment;
             this.clipping = other.alignment;
@@ -99,6 +106,9 @@ define([
 
             json.name = this.name;
 
+            json.alpha = this.alpha;
+            json.z = this.z;
+
             json.alignment = this.alignment;
             json.clipping = this.alignment;
             json.contentOffset = this.contentOffset.toJSON(json.contentOffset);
@@ -132,6 +142,9 @@ define([
         GUIStyle.prototype.fromJSON = function(json) {
 
             this.name = json.name;
+
+            this.alpha = json.alpha;
+            this.z = json.z;
 
             this.alignment = json.alignment;
             this.clipping = json.alignment;

@@ -22,11 +22,8 @@ define([
 
             this.style = opts.style instanceof GUIStyle ? opts.style : new GUIStyle(opts.style);
 
-            this.alpha = opts.alpha != undefined ? opts.alpha : 1;
-            this.z = opts.z != undefined ? opts.z : 0;
-
             this._down = false;
-            this.needsUpdate = true;
+            this._needsUpdate = true;
         }
 
         GUIComponent.extend(GUIContent);
@@ -38,9 +35,6 @@ define([
             this.texture = other.texture;
 
             this.style.copy(other.style);
-
-            this.alpha = other.alpha;
-            this.z = other.z;
 
             return this;
         };
@@ -58,70 +52,14 @@ define([
             NORMAL = "normal",
             VEC = new Vec2;
         GUIContent.prototype.update = function() {
-            var style = this.style,
-                orgState = style._state,
-                state = orgState,
-                gui = this.guiObject.gui,
-                aspect = gui.aspect,
-                down = this._down,
-                click, touch, position;
 
-            if (Device.mobile) {
-                if ((touch = Input.touches[0])) {
-                    click = true;
-                    position = touch.position;
-                } else {
-                    click = false;
-                }
-            } else {
-                click = Input.mouseButton(0)
-                position = Input.mousePosition;
-            }
-
-            if (down && click) {
-                state = ACTIVE;
-            } else if (down && Device.mobile && !click) {
-                state = ACTIVE;
-            } else {
-                if (position) {
-                    VEC.x = position.x * gui.invWidth;
-                    VEC.y = position.y * gui.invHeight;
-
-                    if (aspect >= 1) {
-                        VEC.x *= aspect;
-                    } else {
-                        VEC.y /= aspect;
-                    }
-                    if (this.guiTransform.position.contains(VEC)) {
-
-                        if (click) {
-                            down = true;
-                            state = ACTIVE;
-                        } else {
-                            down = false;
-                            state = HOVER;
-                        }
-                    } else {
-                        state = NORMAL;
-                    }
-                } else {
-                    state = NORMAL;
-                }
-            }
-
-            if (state !== orgState) {
-                this.style._state = state;
-                this.needsUpdate = true;
-            }
-
-            this._down = down;
         };
 
 
         GUIContent.prototype.setText = function(text) {
 
             this.text = text.toString();
-            this.needsUpdate = true;
+            this._needsUpdate = true;
 
             return this;
         };
@@ -129,7 +67,7 @@ define([
 
         GUIContent.prototype.sort = function(a, b) {
 
-            return b.z - a.z;
+            return b.style.z - a.style.z;
         };
 
 
@@ -140,9 +78,6 @@ define([
             json.texture = this.texture ? this.texture.name : undefined;
 
             json.style = this.style.toJSON(json.style);
-
-            json.alpha = this.alpha;
-            json.z = this.z;
 
             return json;
         };
@@ -155,9 +90,6 @@ define([
             this.texture = json.texture ? Assets.get(json.texture) : undefined;
 
             this.style.fromJSON(json.style);
-
-            this.alpha = json.alpha;
-            this.z = json.z;
 
             return this;
         };

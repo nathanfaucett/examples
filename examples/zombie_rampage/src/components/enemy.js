@@ -62,7 +62,7 @@ define([
         };
 
 
-        Enemy.prototype.init = function() {
+        Enemy.prototype.start = function() {
 
             this.rigidBody2d.on("collide", this.onCollide, this);
             this.rigidBody2d.on("colliding", this.onColliding, this);
@@ -118,11 +118,11 @@ define([
                 playerPosition;
 
             if (player && player.character && !player.character.dead) {
-				playerPosition = player.transform2d.position;
-				if (abs(position.lengthSq() - playerPosition.lengthSq()) <= (this.lineOfSight * this.lineOfSight)) follow = true;
+                playerPosition = player.transform2d.position;
+                if (abs(position.lengthSq() - playerPosition.lengthSq()) <= (this.lineOfSight * this.lineOfSight)) follow = true;
             } else {
-				this.player = this.gameObject.scene.findByTagFirst("Player");
-			}
+                this.player = this.gameObject.scene.findByTagFirst("Player");
+            }
 
             if (follow) this.dir = atan2(playerPosition.y - position.y, playerPosition.x - position.x);
 

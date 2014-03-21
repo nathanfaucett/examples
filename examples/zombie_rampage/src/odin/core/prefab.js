@@ -23,8 +23,6 @@ define([
         Prefab.prototype.create = function() {
             var object = this.objectPool.create();
 
-            object.clear();
-
             object.fromJSON(this.object);
             object.once("remove", onRemove, this);
 

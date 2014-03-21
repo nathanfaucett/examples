@@ -49,7 +49,6 @@ define([
             this.speedSpread = opts.speedSpread != undefined ? opts.speedSpread : 0;
 
             this.particleSystem = undefined;
-            this.transform = undefined;
 
             this.worldSpace = opts.worldSpace != undefined ? opts.worldSpace : true;
 
@@ -189,8 +188,6 @@ define([
             var particles = this.particles,
                 i = particles.length;
 
-            this.transform = undefined;
-
             this.time = 0;
             this._time = 0;
             this.playing = false;
@@ -199,17 +196,15 @@ define([
             while (i--) PARTICLE_POOL.removeObject(particles[i]);
             particles.length = 0;
 
-            this._webgl = {};
-
             return this;
         };
 
 
         var VEC = new Vec3;
         Emitter.prototype.spawn = function(count) {
-            var transform = this.transform || (this.transform = this.particleSystem.gameObject.transform || this.particleSystem.gameObject.transform2d),
+            var transform = this.particleSystem.transform || this.particleSystem.transform2d,
                 transformPosition = transform.toWorld(VEC.set(0, 0, 0)),
-                matrixWorld = transform.matrixWorld,
+                transformMatrix = transform.matrixWorld,
 
                 position = this.position,
                 positionSpread = this.positionSpread,
@@ -258,7 +253,7 @@ define([
                 posz = randFloat(-positionSpread.z, positionSpread.z);
             }
 
-            for (; limit--;) {
+            while (limit--) {
                 particle = PARTICLE_POOL.create();
                 pos = particle.position;
                 vel = particle.velocity;
@@ -326,7 +321,7 @@ define([
                     vel.y = dy * r * spd;
                     vel.z = dz * r * spd;
                 }
-                vel.transformMat4Rotation(matrixWorld);
+                vel.transformMat4Rotation(transformMatrix);
 
                 acc.x = acceleration.x + randFloat(-accelerationSpread.x, accelerationSpread.x);
                 acc.y = acceleration.y + randFloat(-accelerationSpread.y, accelerationSpread.y);
@@ -369,7 +364,8 @@ define([
                 if (!this.loop && this.time > this.duration) this.emitting = false;
             }
 
-            for (i = particles.length; i--;) {
+            i = particles.length;
+            while (i--) {
                 particle = particles[i];
                 particle.update(dt);
                 life = particle.lifeTime / particle.life;

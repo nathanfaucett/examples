@@ -9,7 +9,6 @@ define([
     function(Class, Component, Log) {
         "use strict";
 
-
         /**
          * @class GameObject
          * @extends Class
@@ -21,6 +20,8 @@ define([
             opts || (opts = {});
 
             Class.call(this);
+
+            this.name = opts.name != undefined ? opts.name : "GameObject_" + this._id;
 
             this.scene = undefined;
 
@@ -41,13 +42,20 @@ define([
 
 
         GameObject.prototype.copy = function(other) {
-            var components = other.components,
+            var components = this.components,
+                otherComponents = other.components,
                 tags = other.tags,
                 otherComponent, component,
                 i = components.length;
 
             while (i--) {
-                otherComponent = components[i];
+                component = components[i];
+                if (!other.hasComponent(component._className)) this.removeComponent(component);
+            }
+
+            i = otherComponents.length;
+            while (i--) {
+                otherComponent = otherComponents[i];
 
                 if ((component = this.getComponent(otherComponent._type))) {
                     component.copy(otherComponent);
@@ -55,6 +63,7 @@ define([
                     this.addComponent(otherComponent.clone());
                 }
             }
+
             i = tags.length;
             while (i--) this.addTag(tags[i]);
 
@@ -167,7 +176,7 @@ define([
                 components.push(component);
                 this._componentType[component._type] = component;
                 this._componentHash[component._id] = component;
-                if (component._jsonId !== -1) this._componentJSONHash[component._jsonId] = component._jsonId;
+                if (component._jsonId !== -1) this._componentJSONHash[component._jsonId] = component;
 
                 component.gameObject = this;
                 this[name] = component;
@@ -179,15 +188,16 @@ define([
                         if (!comp) continue;
 
                         j = components.length;
-                        while (j--) {
-                            name = components[j]._name;
-                            comp[name] = components[j];
-                        }
+                        while (j--) comp[components[j]._name] = components[j];
                     }
+
+                    component.init();
+                    component.emit("init");
                 }
 
                 this.emit("add" + component._type, component);
                 this.emit("addComponent", component);
+                component.emit("add", this);
 
                 if (this.scene) this.scene._addComponent(component);
             } else {
@@ -219,6 +229,13 @@ define([
                 }
             }
 
+            i = components.length;
+            while (i--) {
+                component = components[i];
+                component.init();
+                component.emit("init");
+            }
+
             return this;
         };
 
@@ -234,6 +251,9 @@ define([
                 comp, i, j;
 
             if (this[name]) {
+                component.emit("remove", this);
+                this.emit("remove" + component._type, component);
+                this.emit("removeComponent", component);
 
                 if (!others) {
                     i = components.length;
@@ -255,10 +275,6 @@ define([
 
                 component.gameObject = undefined;
                 this[name] = undefined;
-
-                this.emit("remove" + component._type, component);
-                this.emit("removeComponent", component);
-                component.emit("remove", component);
 
                 if (this.scene) this.scene._removeComponent(component);
                 if (clear) component.clear();
@@ -298,7 +314,7 @@ define([
 
         GameObject.prototype.getComponent = function(type) {
 
-            return this._componentType[type] || this[type] || this[type.toLowerCase()];
+            return this._componentType[type];
         };
 
 
@@ -311,6 +327,26 @@ define([
             }
 
             return false;
+        };
+
+
+        GameObject.prototype.find = function(name) {
+            var transform = this.transform || this.transform2d,
+                children, child, i;
+
+            if (!transform) return undefined;
+
+            children = transform.children;
+            i = children.length;
+
+            while (i--) {
+                child = children[i];
+
+                if (child.gameObject.name === name) return child.gameObject;
+                if ((child = child.find(name))) return child;
+            }
+
+            return undefined;
         };
 
 
@@ -341,22 +377,41 @@ define([
             i = tags.length;
             while (i--) jsonTags[i] = tags[i];
 
+            json.name = this.name;
+
             return json;
         };
 
 
         GameObject.prototype.fromJSON = function(json) {
             Class.prototype.fromJSON.call(this, json);
-            var jsonComponents = json.components || (json.components = []),
+            var components = this.components,
+                jsonComponents = json.components || (json.components = []),
                 component, jsonComponent, tag,
                 tags = this.tags,
                 jsonTags = json.tags || (json.tags = []),
-                i = jsonComponents.length;
+                i = components.length,
+                has, type, j;
 
+            while (i--) {
+                component = components[i];
+                type = component._type;
+                has = false;
+
+                j = jsonComponents.length;
+                while (j--) {
+                    jsonComponent = jsonComponents[i];
+                    if (type === jsonComponent._type) has = true;
+                }
+
+                if (!has) this.removeComponent(component);
+            }
+
+            i = jsonComponents.length;
             while (i--) {
                 if (!(jsonComponent = jsonComponents[i])) continue;
 
-                if ((component = this.findComponentById(jsonComponent._id)) || (component = this.getComponent(jsonComponent._type))) {
+                if ((component = this.findComponentByJSONId(jsonComponent._id)) || (component = this.getComponent(jsonComponent._type))) {
                     component.fromJSON(jsonComponent);
                 } else {
                     this.addComponent(Class.fromJSON(jsonComponent));
@@ -367,6 +422,8 @@ define([
             while (i--) {
                 if (tags.indexOf((tag = jsonTags[i])) === -1) tags.push(tag);
             }
+
+            this.name = json.name;
 
             return this;
         };

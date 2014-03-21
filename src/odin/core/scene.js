@@ -3,17 +3,13 @@ if (typeof(define) !== "function") {
 }
 define([
         "odin/base/class",
-        "odin/core/components/transform",
-        "odin/core/components/transform_2d",
         "odin/core/game_object",
         "odin/core/world/world",
         "odin/core/game/log"
     ],
-    function(Class, Transform, Transform2D, GameObject, World, Log) {
+    function(Class, GameObject, World, Log) {
         "use strict";
 
-
-        var defineProperty = Object.defineProperty;
 
         /**
          * Scenes manage GameObjects and their Components
@@ -50,23 +46,35 @@ define([
 
         Scene.prototype.copy = function(other) {
             var otherGameObjects = other.gameObjects,
-                i;
+                i = otherGameObjects.length;
 
             this.clear();
             this.name = other.name + "." + this._id;
 
-            for (i = otherGameObjects.length; i--;) this.addGameObject(otherGameObjects[i].clone());
+            while (i--) this.addGameObject(otherGameObjects[i].clone());
 
             return this;
         };
 
 
         Scene.prototype.init = function() {
+            var gameObjects = this.gameObjects,
+                componentTypes = this._componentTypes,
+                i = componentTypes.length;
+
+            this.world && this.world.init();
+
+            i = gameObjects.length;
+            while (i--) gameObjects[i].emit("init");
+        };
+
+
+        Scene.prototype.start = function() {
             var types = this._componentTypes,
                 gameObjects = this.gameObjects,
                 components, component, i, j;
 
-            this.world && this.world.init();
+            this.world && this.world.start();
 
             i = types.length;
             while (i--) {
@@ -75,13 +83,13 @@ define([
                 while (j--) {
                     component = components[j];
 
-                    component.emit("init");
-                    component.init();
+                    component.start();
+                    component.emit("start");
                 }
             }
 
             i = gameObjects.length;
-            while (i--) gameObjects[i].emit("init");
+            while (i--) gameObjects[i].emit("start");
         };
 
 
@@ -106,10 +114,10 @@ define([
 
         Scene.prototype.clear = function() {
             var gameObjects = this.gameObjects,
-                i;
+                i = gameObjects.length;
 
             this.world = undefined;
-            for (i = gameObjects.length; i--;) this.removeGameObject(gameObjects[i], true);
+            while (i--) this.removeGameObject(gameObjects[i], true);
 
             this.off();
 
@@ -156,7 +164,7 @@ define([
             }
             var gameObjects = this.gameObjects,
                 index = gameObjects.indexOf(gameObject),
-                components,
+                components, transform, children, child,
                 i;
 
             if (index === -1) {
@@ -171,6 +179,16 @@ define([
                 components = gameObject.components;
                 i = components.length;
                 while (i--) this._addComponent(components[i]);
+
+                if ((transform = gameObject.transform || gameObject.transform2d)) {
+                    i = (children = transform.children).length;
+
+                    while (i--) {
+                        if ((child = children[i].gameObject) && !this.hasGameObject(child)) {
+                            this.addGameObject(child);
+                        }
+                    }
+                }
 
                 if (this.game) gameObject.emit("init");
                 this.emit("addGameObject", gameObject);
@@ -202,22 +220,27 @@ define([
             if (component._jsonId !== -1) this._componentJSONHash[component._jsonId] = component;
 
             types.push(component);
-            types.sort(component.sort);
+
             if (isNew) {
                 componentTypes.push(types);
                 componentTypes.sort(sortComponentTypes);
             }
 
-            if (this.game) component.init();
+            types.sort(component.sort);
 
             this.emit("add" + type, component);
             this.emit("addComponent", component);
+
+            if (this.game) {
+                component.start();
+                component.emit("start");
+            }
         };
 
 
         function sortComponentTypes(a, b) {
 
-            return (a[0] instanceof Transform || a[0] instanceof Transform2D) ? 1 : -1;
+            return (b[0].constructor.order || 0) - (a[0].constructor.order || 0);
         }
 
 
@@ -228,7 +251,7 @@ define([
             }
             var gameObjects = this.gameObjects,
                 index = gameObjects.indexOf(gameObject),
-                components,
+                components, transform, children, child,
                 i;
 
             if (index !== -1) {
@@ -242,6 +265,16 @@ define([
                 components = gameObject.components;
                 i = components.length;
                 while (i--) this._removeComponent(components[i]);
+
+                if ((transform = gameObject.transform || gameObject.transform2d)) {
+                    i = (children = transform.children).length;
+
+                    while (i--) {
+                        if ((child = children[i].gameObject) && this.hasGameObject(child)) {
+                            this.removeGameObject(child);
+                        }
+                    }
+                }
 
                 this.emit("removeGameObject", gameObject);
                 gameObject.emit("remove", gameObject);
@@ -279,6 +312,12 @@ define([
             this.emit("removeComponent", component);
 
             component.clear();
+        };
+
+
+        Scene.prototype.hasGameObject = function(gameObject) {
+
+            return !!~this.gameObjects.indexOf(gameObject);
         };
 
 
@@ -331,6 +370,21 @@ define([
         };
 
 
+        Scene.prototype.find = function(name) {
+            var gameObjects = this.gameObjects,
+                child, i = gameObjects.length;
+
+            while (i--) {
+                child = gameObjects[i];
+
+                if (child.name === name) return child;
+                if ((child = child.find(name))) return child;
+            }
+
+            return undefined;
+        };
+
+
         Scene.prototype.toJSON = function(json) {
             json = Class.prototype.toJSON.call(this, json);
             var gameObjects = this.gameObjects,
@@ -356,13 +410,17 @@ define([
                 i = jsonGameObjects.length;
 
             this.name = json.name;
-            this.world = Class.fromJSON(json.world);
-            this.world.scene = this;
+			
+			if (this.world._className === json.world._className) {
+				this.world.fromJSON(json.world);
+			} else {
+				this.setWorld(Class.fromJSON(json.world));
+			}
 
             while (i--) {
                 if (!(jsonGameObject = jsonGameObjects[i])) continue;
 
-                if ((gameObject = this.findById(jsonGameObject._id))) {
+                if ((gameObject = this.findByJSONId(jsonGameObject._id))) {
                     gameObject.fromJSON(jsonGameObject);
                 } else {
                     this.addGameObject(Class.fromJSON(jsonGameObject));

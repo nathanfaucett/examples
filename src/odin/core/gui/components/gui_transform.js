@@ -3,15 +3,16 @@ if (typeof(define) !== "function") {
 }
 define([
         "odin/math/mathf",
-        "odin/math/vec2",
         "odin/math/rect",
+        "odin/math/vec2",
         "odin/math/mat32",
+        "odin/math/mat3",
         "odin/math/mat4",
         "odin/core/gui/components/gui_component",
         "odin/core/game/config",
         "odin/core/game/log"
     ],
-    function(Mathf, Vec2, Rect, Mat32, Mat4, GUIComponent, Config, Log) {
+    function(Mathf, Rect, Vec2, Mat32, Mat3, Mat4, GUIComponent, Config, Log) {
         "use strict";
 
 
@@ -36,21 +37,27 @@ define([
 
             this.matrix = new Mat32;
             this.matrixWorld = new Mat32;
+
+            this.modelView = new Mat4;
+            this._matricesNeedsUpdate = false;
         }
 
         GUIComponent.extend(GUITransform);
+        GUITransform.order = -999999;
 
 
         GUITransform.prototype.copy = function(other) {
             var children = other.children,
-                i;
+                i = children.length;
 
             this.position.copy(other.position);
             this.scale.copy(other.scale);
             this.rotation = other.rotation;
 
-            for (i = children.length; i--;) this.addChild(children[i].gameObject.clone().transform);
+            while (i--) this.addChild(children[i].gameObject.clone().transform);
             if (other.parent) other.parent.addChild(this);
+
+            this._matricesNeedsUpdate = true;
 
             return this;
         };
@@ -59,9 +66,9 @@ define([
         GUITransform.prototype.clear = function() {
             GUIComponent.prototype.clear.call(this);
             var children = this.children,
-                i;
+                i = children.length;
 
-            for (i = children.length; i--;) this.removeChild(children[i]);
+            while (i--) this.removeChild(children[i]);
 
             this.position.set(0, 0, 0, 0);
             this.scale.set(1, 1);
@@ -69,6 +76,8 @@ define([
 
             this.root = this;
             this.depth = 0;
+
+            this._matricesNeedsUpdate = true;
 
             return this;
         };
@@ -78,8 +87,9 @@ define([
             var vec = new Vec2;
 
             return function(translation, relativeTo) {
-                vec.copy(translation);
                 var position = this.position;
+				
+                vec.copy(translation);
 
                 if (relativeTo instanceof GUITransform) {
                     vec.transformAngle(relativeTo.rotation);
@@ -87,8 +97,8 @@ define([
                     vec.transformAngle(relativeTo);
                 }
 
-                position.x += vec.x;
-                position.y += vec.y;
+				position.x += vec.x;
+				position.y += vec.y;
 
                 return this;
             };
@@ -111,18 +121,18 @@ define([
 
         GUITransform.prototype.lookAt = function() {
             var mat = new Mat32,
-                vec = new Vec2;
+                vec = new Vec2,
+				vec_2 = new Vec2;
 
-            return function(target, up) {
-                up = up || dup;
+            return function(target) {
 
                 if (target instanceof GUITransform) {
                     vec.copy(target.position);
                 } else {
                     vec.copy(target);
                 }
-
-                mat.lookAt(this.position, vec);
+				
+                mat.lookAt(this.position.center(vec_2), vec);
                 this.rotation = mat.getRotation();
 
                 return this;
@@ -132,30 +142,35 @@ define([
 
         GUITransform.prototype.follow = function() {
             var target = new Vec2,
-                position = new Vec2,
+                pos = new Vec2,
                 delta = new Vec2;
 
             return function(transform, speed) {
-                position.set(0, 0).transformMat32(this.matrixWorld);
+				var position = this.position;
+				
+                pos.set(0, 0).transformMat32(this.matrixWorld);
                 target.set(0, 0).transformMat32(transform.matrixWorld);
 
-                delta.vsub(target, position);
+                delta.vsub(target, pos);
 
-                if (delta.lengthSq() > EPSILON) this.position.add(delta.smul(speed));
+                if (delta.lengthSq() > EPSILON) {
+					position.x += delta.x * speed;
+					position.y += delta.y * speed;
+				}
 
                 return this;
             };
         }();
 
 
-        GUITransform.prototype.addChild = function(child) {
+        GUITransform.prototype.addChild = function(child, others) {
             if (!(child instanceof GUITransform)) {
                 Log.error("GUITransform.add: can\'t add passed argument, it is not an instance of GUITransform");
                 return this;
             }
             var children = this.children,
                 index = children.indexOf(child),
-                root, depth;
+                root, depth, scene;
 
             if (index === -1) {
                 if (child.parent) child.parent.remove(child);
@@ -174,6 +189,11 @@ define([
                 this.root = root;
 
                 updateDepth(this, depth);
+                if (!others) {
+                    if (this.gameObject && (scene = this.gameObject.scene)) {
+                        scene.components.GUITransform.sort(this.sort);
+                    }
+                }
             } else {
                 Log.error("GUITransform.add: child is not a member of this GUITransform");
             }
@@ -183,16 +203,21 @@ define([
 
 
         GUITransform.prototype.addChildren = function() {
+            var i = arguments.length,
+                scene;
 
-            for (var i = arguments.length; i--;) this.addChild(arguments[i]);
+            while (i--) this.addChild(arguments[i], true);
+            if (this.gameObject && (scene = this.gameObject.scene)) {
+                scene.components.GUITransform.sort(this.sort);
+            }
             return this;
         };
 
 
-        GUITransform.prototype.removeChild = function(child) {
+        GUITransform.prototype.removeChild = function(child, others) {
             var children = this.children,
                 index = children.indexOf(child),
-                root, depth;
+                root, depth, scene;
 
             if (index !== -1) {
                 child.parent = undefined;
@@ -209,6 +234,11 @@ define([
                 this.root = root;
 
                 updateDepth(this, depth);
+                if (!others) {
+                    if (this.gameObject && (scene = this.gameObject.scene)) {
+                        scene.components.GUITransform.sort(this.sort);
+                    }
+                }
             } else {
                 Log.error("GUITransform.remove: child is not a member of this GUITransform");
             }
@@ -218,18 +248,44 @@ define([
 
 
         GUITransform.prototype.removeChildren = function() {
+            var i = arguments.length,
+                scene;
 
-            for (var i = arguments.length; i--;) this.removeChild(arguments[i]);
+            while (i--) this.removeChild(arguments[i], true);
+            if (this.gameObject && (scene = this.gameObject.scene)) {
+                scene.components.GUITransform.sort(this.sort);
+            }
             return this;
         };
 
 
         GUITransform.prototype.detachChildren = function() {
-            var children = this.children,
-                i;
+            var i = arguments.length;
 
-            for (i = children.length; i--;) this.removeChild(children[i]);
+            while (i--) this.removeChild(children[i]);
             return this;
+        };
+
+
+        GUITransform.prototype.hasChild = function(child) {
+
+            return !!~this.children.indexOf(child);
+        };
+
+
+        GUITransform.prototype.find = function(name) {
+            var children = this.children,
+                child,
+                i = children.length;
+
+            while (i--) {
+                child = children[i];
+
+                if (child.gameObject.name === name) return child;
+                if ((child = child.find(name))) return child;
+            }
+
+            return undefined;
         };
 
 
@@ -249,22 +305,32 @@ define([
         }();
 
 
-        var CENTER = new Vec2;
         GUITransform.prototype.update = function() {
-            var matrix = this.matrix,
-                parent = this.parent,
-                position = this.position;
+			var matrix = this.matrix,
+				parent = this.parent;
 
-            CENTER.x = position.x + (position.width * 0.5);
-            CENTER.y = position.y + (position.height * 0.5);
-            matrix.compose(CENTER, this.scale, this.rotation);
+			matrix.compose(this.position, this.scale, this.rotation);
 
-            if (parent) {
-                this.matrixWorld.mmul(parent.matrixWorld, matrix);
-            } else {
-                this.matrixWorld.copy(matrix);
-            }
-        };
+			if (parent) {
+				this.matrixWorld.mmul(parent.matrixWorld, matrix);
+			} else {
+				this.matrixWorld.copy(matrix);
+			}
+
+			this._matricesNeedsUpdate = true;
+		};
+
+
+        GUITransform.prototype.updateMatrices = function() {
+            var mat = new Mat4;
+			
+			return function(viewMatrix) {
+				if (!this._matricesNeedsUpdate) return;
+	
+				this.modelView.mmul(viewMatrix, mat.fromMat32(this.matrixWorld));
+				this._matricesNeedsUpdate = false;
+			};
+		}();
 
 
         GUITransform.prototype.sort = function(a, b) {
@@ -275,6 +341,11 @@ define([
 
         GUITransform.prototype.toJSON = function(json) {
             json = GUIComponent.prototype.toJSON.call(this, json);
+            var children = this.children,
+                jsonChildren = json.children || (json.children = []),
+                i = children.length;
+
+            while (i--) jsonChildren[i] = children[i]._id;
 
             json.position = this.position.toJSON(json.position);
             json.scale = this.scale.toJSON(json.scale);
@@ -286,10 +357,37 @@ define([
 
         GUITransform.prototype.fromJSON = function(json) {
             GUIComponent.prototype.fromJSON.call(this, json);
+            var children = json.children,
+                i = children.length,
+                child, scene;
+
+            if (this.guiObject && (scene = this.guiObject.scene)) {
+                while (i--) {
+                    child = scene.findGUIComponentByJSONId(children[i]);
+
+                    if (!this.hasChild(child)) {
+                        this.addChild(child);
+                    }
+                }
+            } else {
+                this.once("start", function() {
+					var scene = this.guiObject.scene;
+					
+                    while (i--) {
+                        child = scene.findGUIComponentByJSONId(children[i]);
+
+                        if (!this.hasChild(child)) {
+                            this.addChild(child);
+                        }
+                    }
+                });
+            }
 
             this.position.fromJSON(json.position);
             this.scale.fromJSON(json.scale);
             this.rotation = json.rotation;
+
+            this._matricesNeedsUpdate = true;
 
             return this;
         };
@@ -297,10 +395,10 @@ define([
 
         function updateDepth(transform, depth) {
             var children = transform.children,
-                i;
+                i = children.length;
 
             transform.depth = depth;
-            for (i = children.length; i--;) updateDepth(children[i], depth + 1);
+            while (i--) updateDepth(children[i], depth + 1);
         }
 
 

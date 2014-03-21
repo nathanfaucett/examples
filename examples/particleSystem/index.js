@@ -15,7 +15,7 @@ require({
 
         function Rotator(opts) {
 
-            Component.call(this, opts);
+            Component.call(this, "Rotator", opts);
         }
         Component.extend(Rotator);
 
@@ -160,7 +160,7 @@ require({
 
         AssetLoader.on("load", function() {
 
-            game.on("init", start).init();
+            game.on("start", start).start();
         }).load();
     }
 );

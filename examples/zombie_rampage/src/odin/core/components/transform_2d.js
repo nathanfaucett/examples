@@ -39,22 +39,25 @@ define([
 
             this.modelView = new Mat4;
             this.normalMatrix = new Mat3;
-            this._matricesViewNeedsUpdate = false;
+            this._matricesNeedsUpdate = false;
         }
 
         Component.extend(Transform2D);
+        Transform2D.order = -999999;
 
 
         Transform2D.prototype.copy = function(other) {
             var children = other.children,
-                i;
+                i = children.length;
 
             this.position.copy(other.position);
             this.scale.copy(other.scale);
             this.rotation = other.rotation;
 
-            for (i = children.length; i--;) this.addChild(children[i].gameObject.clone().transform);
+            while (i--) this.addChild(children[i].gameObject.clone().transform);
             if (other.parent) other.parent.addChild(this);
+
+            this._matricesNeedsUpdate = true;
 
             return this;
         };
@@ -63,9 +66,9 @@ define([
         Transform2D.prototype.clear = function() {
             Component.prototype.clear.call(this);
             var children = this.children,
-                i;
+                i = children.length;
 
-            for (i = children.length; i--;) this.removeChild(children[i]);
+            while (i--) this.removeChild(children[i]);
 
             this.position.set(0, 0);
             this.scale.set(1, 1);
@@ -73,6 +76,8 @@ define([
 
             this.root = this;
             this.depth = 0;
+
+            this._matricesNeedsUpdate = true;
 
             return this;
         };
@@ -115,8 +120,7 @@ define([
             var mat = new Mat32,
                 vec = new Vec2;
 
-            return function(target, up) {
-                up = up || dup;
+            return function(target) {
 
                 if (target instanceof Transform2D) {
                     vec.copy(target.position);
@@ -150,14 +154,14 @@ define([
         }();
 
 
-        Transform2D.prototype.addChild = function(child) {
+        Transform2D.prototype.addChild = function(child, others) {
             if (!(child instanceof Transform2D)) {
                 Log.error("Transform2D.add: can\'t add passed argument, it is not an instance of Transform2D");
                 return this;
             }
             var children = this.children,
                 index = children.indexOf(child),
-                root, depth;
+                root, depth, scene;
 
             if (index === -1) {
                 if (child.parent) child.parent.remove(child);
@@ -176,6 +180,11 @@ define([
                 this.root = root;
 
                 updateDepth(this, depth);
+                if (!others) {
+                    if (this.gameObject && (scene = this.gameObject.scene)) {
+                        scene.components.Transform2D.sort(this.sort);
+                    }
+                }
             } else {
                 Log.error("Transform2D.add: child is not a member of this Transform2D");
             }
@@ -185,16 +194,21 @@ define([
 
 
         Transform2D.prototype.addChildren = function() {
+            var i = arguments.length,
+                scene;
 
-            for (var i = arguments.length; i--;) this.addChild(arguments[i]);
+            while (i--) this.addChild(arguments[i], true);
+            if (this.gameObject && (scene = this.gameObject.scene)) {
+                scene.components.Transform2D.sort(this.sort);
+            }
             return this;
         };
 
 
-        Transform2D.prototype.removeChild = function(child) {
+        Transform2D.prototype.removeChild = function(child, others) {
             var children = this.children,
                 index = children.indexOf(child),
-                root, depth;
+                root, depth, scene;
 
             if (index !== -1) {
                 child.parent = undefined;
@@ -211,6 +225,11 @@ define([
                 this.root = root;
 
                 updateDepth(this, depth);
+                if (!others) {
+                    if (this.gameObject && (scene = this.gameObject.scene)) {
+                        scene.components.Transform2D.sort(this.sort);
+                    }
+                }
             } else {
                 Log.error("Transform2D.remove: child is not a member of this Transform2D");
             }
@@ -220,18 +239,44 @@ define([
 
 
         Transform2D.prototype.removeChildren = function() {
+            var i = arguments.length,
+                scene;
 
-            for (var i = arguments.length; i--;) this.removeChild(arguments[i]);
+            while (i--) this.removeChild(arguments[i], true);
+            if (this.gameObject && (scene = this.gameObject.scene)) {
+                scene.components.Transform2D.sort(this.sort);
+            }
             return this;
         };
 
 
         Transform2D.prototype.detachChildren = function() {
-            var children = this.children,
-                i;
+            var i = arguments.length;
 
-            for (i = children.length; i--;) this.removeChild(children[i]);
+            while (i--) this.removeChild(children[i]);
             return this;
+        };
+
+
+        Transform2D.prototype.hasChild = function(child) {
+
+            return !!~this.children.indexOf(child);
+        };
+
+
+        Transform2D.prototype.find = function(name) {
+            var children = this.children,
+                child,
+                i = children.length;
+
+            while (i--) {
+                child = children[i];
+
+                if (child.gameObject.name === name) return child;
+                if ((child = child.find(name))) return child;
+            }
+
+            return undefined;
         };
 
 
@@ -242,7 +287,7 @@ define([
 
 
         Transform2D.prototype.toLocal = function() {
-            var mat = new Mat32;
+            var mat = new Mat4;
 
             return function(v) {
 
@@ -266,17 +311,17 @@ define([
                     this.matrixWorld.copy(matrix);
                 }
 
-                this._matricesViewNeedsUpdate = true;
+                this._matricesNeedsUpdate = true;
             };
         }();
 
 
         Transform2D.prototype.updateMatrices = function(viewMatrix) {
-            if (!this._matricesViewNeedsUpdate) return;
+            if (!this._matricesNeedsUpdate) return;
 
             this.modelView.mmul(viewMatrix, this.matrixWorld);
             this.normalMatrix.inverseMat4(this.modelView).transpose();
-            this._matricesViewNeedsUpdate = false;
+            this._matricesNeedsUpdate = false;
         };
 
 
@@ -288,6 +333,11 @@ define([
 
         Transform2D.prototype.toJSON = function(json) {
             json = Component.prototype.toJSON.call(this, json);
+            var children = this.children,
+                jsonChildren = json.children || (json.children = []),
+                i = children.length;
+
+            while (i--) jsonChildren[i] = children[i]._id;
 
             json.position = this.position.toJSON(json.position);
             json.scale = this.scale.toJSON(json.scale);
@@ -299,10 +349,37 @@ define([
 
         Transform2D.prototype.fromJSON = function(json) {
             Component.prototype.fromJSON.call(this, json);
+            var children = json.children,
+                i = children.length,
+                child, scene;
+
+            if (this.gameObject && (scene = this.gameObject.scene)) {
+                while (i--) {
+                    child = scene.findComponentByJSONId(children[i]);
+
+                    if (!this.hasChild(child)) {
+                        this.addChild(child);
+                    }
+                }
+            } else {
+                this.once("start", function() {
+					var scene = this.gameObject.scene;
+					
+                    while (i--) {
+                        child = scene.findComponentByJSONId(children[i]);
+
+                        if (!this.hasChild(child)) {
+                            this.addChild(child);
+                        }
+                    }
+                });
+            }
 
             this.position.fromJSON(json.position);
             this.scale.fromJSON(json.scale);
             this.rotation = json.rotation;
+
+            this._matricesNeedsUpdate = true;
 
             return this;
         };
@@ -310,10 +387,10 @@ define([
 
         function updateDepth(transform, depth) {
             var children = transform.children,
-                i;
+                i = children.length;
 
             transform.depth = depth;
-            for (i = children.length; i--;) updateDepth(children[i], depth + 1);
+            while (i--) updateDepth(children[i], depth + 1);
         }
 
 

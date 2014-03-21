@@ -49,7 +49,6 @@ define([
             this.speedSpread = opts.speedSpread != undefined ? opts.speedSpread : 0;
 
             this.particleSystem = undefined;
-            this.transform = undefined;
 
             this.worldSpace = opts.worldSpace != undefined ? opts.worldSpace : true;
 
@@ -187,8 +186,6 @@ define([
             var particles = this.particles,
                 i = particles.length;
 
-            this.transform = undefined;
-
             this.time = 0;
             this._time = 0;
             this.playing = false;
@@ -197,15 +194,13 @@ define([
             while (i--) PARTICLE_POOL.removeObject(particles[i]);
             particles.length = 0;
 
-            this._webgl = {};
-
             return this;
         };
 
 
         var VEC = new Vec2;
         Emitter2D.prototype.spawn = function(count) {
-            var transform = this.transform || (this.transform = this.particleSystem.gameObject.transform || this.particleSystem.gameObject.transform2d),
+            var transform = this.particleSystem.transform || this.particleSystem.transform2d,
                 transformPosition = transform.toWorld(VEC.set(0, 0)),
 
                 position = this.position,
@@ -254,7 +249,7 @@ define([
                 posy = randFloat(-positionSpread.y, positionSpread.y);
             }
 
-            for (; limit--;) {
+            while (limit--) {
                 particle = PARTICLE_POOL.create();
                 pos = particle.position;
                 vel = particle.velocity;
@@ -352,7 +347,8 @@ define([
                 if (!this.loop && this.time > this.duration) this.emitting = false;
             }
 
-            for (i = particles.length; i--;) {
+            i = particles.length;
+            while (i--) {
                 particle = particles[i];
                 particle.update(dt);
                 life = particle.lifeTime / particle.life;

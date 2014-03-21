@@ -7,7 +7,6 @@ require({
 
         Odin.globalize();
 
-
         var random = Math.random,
             PI = Math.PI,
             TWO_PI = PI * 2;
@@ -21,16 +20,15 @@ require({
             this.speed = 1;
             this.zoomSpeed = 6;
         }
-
         Component.extend(CameraControl);
-
 
         CameraControl.prototype.update = function() {
             var transform = this.transform2d,
                 position = this.transform2d.position,
                 camera2d = this.camera2d,
                 dt = Time.delta,
-                spd = this.speed;
+                spd = this.speed,
+                mouseWheel = Input.axis("mouseWheel");
 
             if (Input.mouseButton(0)) {
                 position.x += -dt * spd * Input.axis("mouseX");
@@ -44,7 +42,7 @@ require({
 
                 this.gameObject.scene.addGameObject(instance);
             }
-            camera2d.setOrthographicSize(camera2d.orthographicSize + -dt * this.zoomSpeed * Input.axis("mouseWheel"));
+            if (mouseWheel) camera2d.setOrthographicSize(camera2d.orthographicSize + -dt * this.zoomSpeed * Input.axis("mouseWheel"));
         };
 
 
@@ -85,7 +83,10 @@ require({
             debug: true,
             forceCanvas: false,
             width: 960,
-            height: 640
+            height: 640,
+            renderer: {
+                disableDepth: true
+            }
         });
 
         var scene = new Scene({
@@ -236,32 +237,18 @@ require({
         scene.addGameObjects(camera, left, right, top, bottom);
 
 
-        function TEST(opts) {
-
-            GUIComponent.call(this, "TEST", opts);
-
-            this.i = 0;
-        }
-
-        GUIComponent.extend(TEST);
-
-
-        GUIComponent.prototype.update = function() {
-            var guiContent = this.guiContent;
-
-            guiContent.setText("FPS: " + Mathf.truncate(Time.fps, 2));
-        };
-
-
         gui = new Odin.GUI({
             name: "Level"
         });
         guiObject = new Odin.GUIObject({
-            position: new Odin.Rect(0, 0, 0.25, 0.25),
+            position: new Rect(0, 0, 64, 64),
             components: [
                 new Odin.GUIContent({
-                    text: "My Name is Nathan",
+                    text: "Hey Stop That",
                     style: {
+                        wordWrap: true,
+                        stretchWidth: false,
+
                         normal: {
                             text: new Odin.Color()
                         },
@@ -270,11 +257,9 @@ require({
                         },
                         active: {
                             text: new Odin.Color("blue")
-                        },
-                        wordWrap: true
+                        }
                     }
-                }),
-                new TEST
+                })
             ]
         });
         gui.addGUIObject(guiObject);
@@ -294,14 +279,14 @@ require({
         }
 
 
-        game.on("init", function() {
+        game.on("start", function() {
             start();
         });
 
 
         AssetLoader.on("load", function() {
 
-            game.init();
+            game.start();
         }).load();
     }
 );

@@ -37,7 +37,6 @@ define(
             this.Asset = require("odin/core/assets/asset");
             this.Assets = require("odin/core/assets/assets");
             this.AudioClip = require("odin/core/assets/audio_clip");
-            this.Bone = require("odin/core/assets/bone");
             this.Material = require("odin/core/assets/material");
             this.Mesh = require("odin/core/assets/mesh");
             this.SpriteSheet = require("odin/core/assets/sprite_sheet");
@@ -52,6 +51,7 @@ define(
             this.GUIText = require("odin/core/components/gui_text");
             this.GUITexture = require("odin/core/components/gui_texture");
             this.Light = require("odin/core/components/light");
+            this.MeshAnimation = require("odin/core/components/mesh_animation");
             this.MeshFilter = require("odin/core/components/mesh_filter");
             this.OrbitControl = require("odin/core/components/orbit_control");
             this.RigidBody2D = require("odin/core/components/rigid_body_2d");
@@ -131,20 +131,20 @@ define(
          * @param String name
          * @param Function fn
          */
-		Odin.prototype.benchmark = function(name, fn, times) {
-			times || (times = 1000);
-			var start = 0.0,
-				time = 0.0,
-				i = times;
-			
-			while (i--) {
-				start = now();
-				fn();
-				time += now() - start;
-			}
-			
-			console.log(name + ":\n\t" + times / time +" (ops/sec)\n\t"+ time / times +"(avg/call)");
-		};
+        Odin.prototype.benchmark = function(name, fn, times) {
+            times || (times = 1000);
+            var start = 0.0,
+                time = 0.0,
+                i = times;
+
+            while (i--) {
+                start = now();
+                fn();
+                time += now() - start;
+            }
+
+            console.log(name + ":\n\t" + times / time + " (ops/sec)\n\t" + time / times + "(avg/call)");
+        };
 
 
         return new Odin;

@@ -4,12 +4,13 @@ if (typeof define !== "function") {
 define([
         "odin/base/class",
         "odin/base/time",
+        "odin/core/game/log",
         "odin/core/components/component",
         "odin/core/components/particle_system/emitter",
         "odin/core/components/particle_system/emitter_2d",
         "odin/core/components/particle_system/tween"
     ],
-    function(Class, Time, Component, Emitter, Emitter2D, Tween) {
+    function(Class, Time, Log, Component, Emitter, Emitter2D, Tween) {
         "use strict";
 
 
@@ -52,13 +53,29 @@ define([
 
 
         ParticleSystem.prototype.copy = function(other) {
-            var otherEmitters = other.emitters,
-                i = 0,
-                il = otherEmitters.length;;
+            var emitters = this.emitters,
+                otherEmitters = other.emitters,
+                i = otherEmitters.length,
+                j = emitters.length,
+                emitter, otherEmitter;
 
-            this.clear();
+            while (i-- > j) this.removeEmitter(emitters[i]);
 
-            for (; i < il; i++) this.addEmitter(otherEmitters[i].clone());
+            i = otherEmitters.length;
+            while (i--) {
+                otherEmitter = otherEmitters[i];
+
+                if ((emitter = emitters[i])) {
+                    if ((emitter._className === otherEmitter._className)) {
+                        otherEmitters[i].copy(other);
+                    } else {
+                        this.removeEmitter(emitter);
+                        this.addEmitter(otherEmitter.clone());
+                    }
+                } else {
+                    this.addEmitter(otherEmitter.clone());
+                }
+            }
             this.playing = other.playing;
 
             return this;
@@ -70,7 +87,7 @@ define([
             var emitters = this.emitters,
                 i = emitters.length;;
 
-            while (i--) this.removeEmitter(emitters[i]);
+            while (i--) emitters[i].clear();
             return this;
         };
 
@@ -95,8 +112,9 @@ define([
 
 
         ParticleSystem.prototype.add = function() {
+            var i = arguments.length;
 
-            for (var i = arguments.length; i--;) this.addEmitter(arguments[i]);
+            while (i--) this.addEmitter(arguments[i]);
             return this;
         };
 
@@ -122,8 +140,9 @@ define([
 
 
         ParticleSystem.prototype.remove = function() {
+            var i = arguments.length;
 
-            for (var i = arguments.length; i--;) this.removeEmitter(arguments[i]);
+            while (i--) this.removeEmitter(arguments[i]);
             return this;
         };
 
@@ -134,7 +153,7 @@ define([
         };
 
 
-        ParticleSystem.prototype.findEmitterByServerId = function(id) {
+        ParticleSystem.prototype.findEmitterByJSONId = function(id) {
 
             return this._emitterJSONHash[id];
         };
@@ -146,9 +165,9 @@ define([
          */
         ParticleSystem.prototype.play = function() {
             var emitters = this.emitters,
-                i;
+                i = emitters.length;
 
-            for (i = emitters.length; i--;) emitters[i].play();
+            while (i--) emitters[i].play();
             this.playing = true;
 
             return this;
@@ -161,9 +180,9 @@ define([
             var dt = Time.delta,
                 emitters = this.emitters,
                 emitter, playing = false,
-                i;
+                i = emitters.length;
 
-            for (i = emitters.length; i--;) {
+            while (i--) {
                 emitter = emitters[i];
                 emitter.update(dt);
                 if (emitter.playing) playing = true;
@@ -177,10 +196,9 @@ define([
             json = Component.prototype.toJSON.call(this, json);
             var emitters = this.emitters,
                 jsonEmitters = json.emitters || (json.emitters = []),
-                i = 0,
-                il = emitters.length;
+                i = emitters.length;
 
-            for (; i < il; i++) {
+            while (i--) {
                 jsonEmitters[i] = emitters[i].toJSON(jsonEmitters[i]);
             }
             json.playing = this.playing;
@@ -193,13 +211,12 @@ define([
             Component.prototype.fromJSON.call(this, json);
             var jsonEmitters = json.emitters,
                 emitter, jsonEmitter,
-                i = 0,
-                il = jsonEmitters.length;
+                i = jsonEmitters.length;
 
-            for (; i < il; i++) {
+            while (i--) {
                 jsonEmitter = jsonEmitters[i];
 
-                if ((emitter = this.findEmitterById(jsonEmitter._id))) {
+                if ((emitter = this.findEmitterByJSONId(jsonEmitter._id))) {
                     emitter.fromJSON(jsonEmitter);
                 } else {
                     this.addEmitter(Class.fromJSON(jsonEmitter));
